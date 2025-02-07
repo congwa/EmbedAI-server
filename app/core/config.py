@@ -8,10 +8,10 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # 数据库配置
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite:///./app.db"
     
     # JWT配置
-    SECRET_KEY: str
+    SECRET_KEY: str = "123456"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # 默认模型配置
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings():
+    # 优先加载环境变量的配置
     return Settings()
 
-settings = get_settings() 
+settings = get_settings()
