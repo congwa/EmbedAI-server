@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import admin, client, auth
+from app.api.v1 import admin, client
 from app.models.database import Base, engine
 from app.core.exceptions import (
     HTTPException,
@@ -91,7 +91,6 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 
 # 注册路由
-app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(client.router, prefix=settings.API_V1_STR)
 
