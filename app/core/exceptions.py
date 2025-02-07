@@ -2,6 +2,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from typing import Union, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.response import APIResponse
 
 class BaseAPIException(HTTPException):
     def __init__(
@@ -49,25 +50,25 @@ class AuthorizationError(BaseAPIException):
         )
 
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail}
+    return APIResponse.error(
+        message=exc.detail,
+        code=exc.status_code
     )
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Database error occurred"}
+    return APIResponse.error(
+        message="Database error occurred",
+        code=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
 
 async def validation_exception_handler(request: Request, exc: ValidationError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail}
+    return APIResponse.error(
+        message=exc.detail,
+        code=exc.status_code
     )
 
 async def generic_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "An unexpected error occurred"}
-    ) 
+    return APIResponse.error(
+        message="An unexpected error occurred",
+        code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )

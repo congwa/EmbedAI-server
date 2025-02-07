@@ -3,6 +3,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 import time
 from app.core.logger import Logger
+from app.core.response import APIResponse
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -39,9 +40,9 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
             for header in required_headers:
                 if header not in request.headers:
                     Logger.warning(f"Missing required header: {header}")
-                    return Response(
-                        content=f"Missing required header: {header}",
-                        status_code=400
+                    return APIResponse.error(
+                        message=f"Missing required header: {header}",
+                        code=400
                     )
         
-        return await call_next(request) 
+        return await call_next(request)
