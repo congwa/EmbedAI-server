@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "fask-graphrag"
+version = "0.1.0"
+description = ""
+authors = ["congwa <cong_wa@163.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+openai = "^1.61.1"
+fastapi = "^0.115.8"
+uvicorn = "^0.34.0"
+sqlalchemy = "^2.0.37"
+fast-graphrag = "^0.0.4"
+instructor = "^1.7.2"
+asyncio = "^3.4.3"
+pydantic = "^2.10.6"
+pydantic-settings = "^2.7.1"
+jose = "^1.0.0"
+passlib = "^1.7.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
