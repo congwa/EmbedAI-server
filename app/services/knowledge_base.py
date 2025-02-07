@@ -13,6 +13,7 @@ from app.schemas.knowledge_base import (
 )
 from app.utils.session import SessionManager
 from app.utils.rate_limit import rate_limit
+from app.core.config import settings
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
@@ -97,36 +98,34 @@ class KnowledgeBaseService:
         if not documents:
             raise ValueError("No documents available for training")
 
-        # 更新训练状态
-        kb.training_status = TrainingStatus.TRAINING
-        kb.training_started_at = datetime.now()
+        # 检查是否启用训练队列
+        if settings.ENABLE_TRAINING_QUEUE:
+            # 检查是否有其他知识库正在训练
+            training_kb = self.db.query(KnowledgeBase).filter(
+                KnowledgeBase.training_status == TrainingStatus.TRAINING
+            ).first()
+
+            if training_kb:
+                # 如果有其他知识库在训练，将当前知识库设置为排队状态
+                kb.training_status = TrainingStatus.QUEUED
+                kb.queued_at = datetime.now()
+                kb.training_error = None  # 清除之前的错误信息
+                self.db.commit()
+                self.db.refresh(kb)
+                return kb
+
+        # 更新训练状态为排队中
+        kb.training_status = TrainingStatus.QUEUED
+        kb.queued_at = datetime.now()
         kb.training_error = None
+        kb.training_started_at = None  # 重置开始时间
+        kb.training_finished_at = None  # 重置结束时间
         self.db.commit()
+        self.db.refresh(kb)
 
-        try:
-            # 获取会话并开始训练
-            session = await self.session_manager.get_session(
-                str(kb_id),
-                kb.model_config
-            )
-            
-            # 处理所有文档
-            for doc in documents:
-                session.grag.add_document(doc.content)
-
-            # 训练完成后更新状态
-            kb.training_status = TrainingStatus.TRAINED
-            kb.training_finished_at = datetime.now()
-
-        except Exception as e:
-            # 训练失败时更新状态
-            kb.training_status = TrainingStatus.FAILED
-            kb.training_error = str(e)
-            raise
-
-        finally:
-            self.db.commit()
-            self.db.refresh(kb)
+        # 启动异步训练任务
+        from app.utils.tasks import train_knowledge_base
+        train_knowledge_base(kb_id)
 
         return kb
 

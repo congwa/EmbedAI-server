@@ -1,8 +1,8 @@
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import asyncio
 from fast_graphrag import GraphRAG
-from app.core.config import settings
+from app.core.logger import logger
 
 class GraphRAGSession:
     def __init__(self, kb_id: str, model_config: dict):
@@ -38,6 +38,27 @@ class GraphRAGSession:
             ),
         )
 
+    async def train(self, documents: List[str], metadata: Optional[List[Dict[str, Any]]] = None) -> Tuple[int, int, int]:
+        """训练知识库
+
+        Args:
+            documents (List[str]): 要处理的文档内容列表
+            metadata (Optional[List[Dict[str, Any]]], optional): 文档元数据列表. Defaults to None.
+
+        Returns:
+            Tuple[int, int, int]: 返回实体数量、关系数量和文本块数量
+        """
+        try:
+            # 使用GraphRAG的insert方法处理文档
+            return await self.grag.async_insert(
+                content=documents,
+                metadata=metadata,
+                show_progress=True
+            )
+        except Exception as e:
+            logger.error(f"训练过程出错: {e}")
+            raise e
+
 class SessionManager:
     _instance = None
     
@@ -71,4 +92,4 @@ class SessionManager:
                 if (current_time - session.last_active) > timedelta(minutes=30)
             ]
             for kb_id in inactive_sessions:
-                await self.remove_session(kb_id) 
+                await self.remove_session(kb_id)

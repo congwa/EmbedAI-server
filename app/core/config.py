@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     DEFAULT_EMBEDDING_MODEL: str = "BAAI/bge-m3"
     DEFAULT_API_BASE: str = "https://api.siliconflow.cn/v1"
     
+    # 训练配置
+    ENABLE_TRAINING_QUEUE: bool = True  # 是否启用训练队列（同一时间只允许一个知识库训练）
+    
     class Config:
         env_file = ".env"
 

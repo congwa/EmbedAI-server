@@ -19,6 +19,8 @@ pydantic-settings = "^2.7.1"
 jose = "^1.0.0"
 passlib = "^1.7.4"
 redis = "^5.2.1"
+crontab = "^1.0.1"
+huey = "^2.5.2"
 
 
 [build-system]
