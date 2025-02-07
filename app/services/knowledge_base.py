@@ -18,6 +18,11 @@ class KnowledgeBaseService:
         self.session_manager = SessionManager()
 
     async def create(self, kb_in: KnowledgeBaseCreate, owner_id: int) -> KnowledgeBase:
+        # 检查用户是否已经绑定了知识库
+        existing_kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.owner_id == owner_id).first()
+        if existing_kb:
+            raise ValueError("User already has a knowledge base")
+            
         # 创建工作目录
         working_dir = Path(f"workspaces/kb_{owner_id}_{kb_in.name}")
         working_dir.mkdir(parents=True, exist_ok=True)
@@ -25,6 +30,9 @@ class KnowledgeBaseService:
         kb = KnowledgeBase(
             name=kb_in.name,
             owner_id=owner_id,
+            domain=kb_in.domain,
+            example_queries=kb_in.example_queries,
+            entity_types=kb_in.entity_types,
             model_config=kb_in.model_config.dict(),
             working_dir=str(working_dir)
         )

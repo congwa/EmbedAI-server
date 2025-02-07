@@ -9,6 +9,8 @@ from app.schemas.admin import AdminRegister
 from app.models.user import User
 from app.core.config import settings
 from app.core.security import get_password_hash
+from app.schemas.user import UserCreate
+from app.services.user import UserService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -59,6 +61,7 @@ async def register_admin(
 @router.post("/knowledge-bases")
 async def create_knowledge_base(
     kb: KnowledgeBaseCreate,
+    user_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
@@ -68,6 +71,7 @@ async def create_knowledge_base(
 
     Args:
         kb (KnowledgeBaseCreate): 知识库创建模型，包含知识库的基本信息
+        user_id (int): 要绑定的普通用户ID
         db (Session): 数据库会话对象
         current_user: 当前登录的管理员用户
 
@@ -75,7 +79,30 @@ async def create_knowledge_base(
         APIResponse: 包含创建成功的知识库信息的响应对象
     """
     kb_service = KnowledgeBaseService(db)
-    result = await kb_service.create(kb, current_user.id)
+    result = await kb_service.create(kb, user_id)
+    return APIResponse.success(data=result)
+
+@router.post("/users")
+async def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_admin_user)
+):
+    """创建普通用户
+
+    创建一个新的普通用户，只有管理员可以执行此操作。
+    系统会自动为新用户生成SDK密钥和密钥对。
+
+    Args:
+        user_data (UserCreate): 用户创建模型，包含email和password信息
+        db (Session): 数据库会话对象
+        current_user: 当前登录的管理员用户
+
+    Returns:
+        APIResponse: 包含创建成功的用户信息的响应对象
+    """
+    user_service = UserService(db)
+    result = await user_service.create(user_data, current_user.id)
     return APIResponse.success(data=result)
 
 @router.put("/knowledge-bases/{kb_id}")
@@ -85,6 +112,7 @@ async def update_knowledge_base(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
+
     """更新知识库信息
 
     更新指定ID的知识库信息，只有管理员用户可以执行此操作

@@ -2,24 +2,30 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 class ModelConfig(BaseModel):
-    domain: str
-    example_queries: List[str]
-    entity_types: List[str]
     llm: Dict[str, Any]
     embeddings: Dict[str, Any]
 
 class KnowledgeBaseCreate(BaseModel):
     name: str
+    domain: str = "通用知识领域"
+    example_queries: List[str] = []
+    entity_types: List[str] = []
     model_config: ModelConfig
 
 class KnowledgeBaseUpdate(BaseModel):
     name: Optional[str] = None
+    domain: Optional[str] = None
+    example_queries: Optional[List[str]] = None
+    entity_types: Optional[List[str]] = None
     model_config: Optional[ModelConfig] = None
 
 class KnowledgeBaseInDB(BaseModel):
     id: int
     name: str
     owner_id: int
+    domain: str
+    example_queries: List[str]
+    entity_types: List[str]
     model_config: ModelConfig
     working_dir: str
 
@@ -36,4 +42,4 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     response: str
-    context: Optional[Dict[str, Any]] = None 
+    context: Optional[Dict[str, Any]] = None
