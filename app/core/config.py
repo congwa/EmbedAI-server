@@ -7,6 +7,12 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
+    # Redis配置
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    
     # 数据库配置
     DATABASE_URL: str = "sqlite:///./app.db"
     

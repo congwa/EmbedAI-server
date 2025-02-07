@@ -9,6 +9,8 @@ from app.schemas.knowledge_base import (
     QueryResponse
 )
 from app.utils.session import SessionManager
+from datetime import timedelta
+from app.utils.rate_limit import rate_limit
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
@@ -89,4 +91,4 @@ class KnowledgeBaseService:
         )
 
     async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBase]:
-        return self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first() 
+        return self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()

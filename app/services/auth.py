@@ -4,10 +4,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.security import verify_password
+from app.core.security import verify_password, verify_signature
 from app.models.database import get_db
 from app.models.user import User
 from app.schemas.user import TokenData
+from app.core.response import APIResponse
 
 # 配置OAuth2密码Bearer认证方案，指定token获取的URL端点
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -89,3 +90,50 @@ async def get_current_admin_user(
             detail="The user doesn't have enough privileges"
         )
     return current_user
+
+async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[User], Optional[str]]:
+    """验证SDK认证信息
+
+    验证SDK密钥、时间戳、随机数和签名是否有效
+
+    Args:
+        headers (dict): 包含SDK认证信息的请求头字典
+        body_str (str): 请求体字符串
+
+    Returns:
+        tuple[bool, Optional[User], Optional[str]]: 
+            - 验证是否成功
+            - 如果成功，返回用户对象；否则返回None
+            - 如果失败，返回错误信息；否则返回None
+    """
+    # 验证必要的请求头
+    if not all(headers.values()):
+        return False, None, "Missing required SDK authentication headers"
+
+    # 验证时间戳（5分钟有效期）
+    try:
+        ts = int(headers['timestamp'])
+        current_time = int(time.time())
+        if abs(current_time - ts) > 300:
+            return False, None, "Request timestamp expired"
+    except ValueError:
+        return False, None, "Invalid timestamp format"
+
+    # 获取数据库会话并查找用户
+    db: Session = next(get_db())
+    user = db.query(User).filter(User.sdk_key == headers['sdk_key']).first()
+
+    if not user or not user.secret_key:
+        return False, None, "Invalid SDK key"
+
+    # 验证签名
+    if not verify_signature(
+        headers['timestamp'],
+        headers['nonce'],
+        body_str,
+        user.secret_key,
+        headers['signature']
+    ):
+        return False, None, "Invalid signature"
+
+    return True, user, None

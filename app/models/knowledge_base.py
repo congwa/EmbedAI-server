@@ -7,8 +7,8 @@ class KnowledgeBase(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id"), unique=True)
     model_config = Column(JSON)
     working_dir = Column(String)
     
-    owner = relationship("User", back_populates="knowledge_bases") 
+    owner = relationship("User", back_populates="knowledge_base", uselist=False)
