@@ -62,3 +62,28 @@ def require_sdk_auth():
             return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+def admin_required(func):
+    """管理员权限装饰器
+
+    用于验证当前用户是否具有管理员权限。
+    遵循MVC架构，将认证逻辑与响应格式分离。
+    
+    Returns:
+        callable: 装饰器函数
+    
+    Raises:
+        HTTPException: 当用户不是管理员时抛出403权限错误
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        from app.services.auth import get_current_admin_user
+        
+        # 获取当前用户并验证管理员权限
+        current_user = await get_current_admin_user()
+        
+        # 将验证后的用户对象传递给被装饰的函数
+        kwargs['current_user'] = current_user
+        return await func(*args, **kwargs)
+    
+    return wrapper
