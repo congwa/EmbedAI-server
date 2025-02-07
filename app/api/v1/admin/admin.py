@@ -129,3 +129,25 @@ async def update_knowledge_base(
     kb_service = KnowledgeBaseService(db)
     result = await kb_service.update(kb_id, kb, current_user.id)
     return APIResponse.success(data=result)
+
+@router.post("/knowledge-bases/{kb_id}/train")
+async def train_knowledge_base(
+    kb_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_admin_user)
+):
+    """训练知识库
+
+    启动指定ID的知识库训练过程，只有管理员用户可以执行此操作
+
+    Args:
+        kb_id (int): 要训练的知识库ID
+        db (Session): 数据库会话对象
+        current_user: 当前登录的管理员用户
+
+    Returns:
+        APIResponse: 包含训练状态的响应对象
+    """
+    kb_service = KnowledgeBaseService(db)
+    result = await kb_service.train(kb_id)
+    return APIResponse.success(data=result)

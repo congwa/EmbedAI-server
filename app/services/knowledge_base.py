@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional, Tuple
+from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.knowledge_base import KnowledgeBase
+from app.models.knowledge_base import KnowledgeBase, TrainingStatus
+from app.models.document import Document
+from app.models.user import User
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
@@ -9,7 +12,6 @@ from app.schemas.knowledge_base import (
     QueryResponse
 )
 from app.utils.session import SessionManager
-from datetime import timedelta
 from app.utils.rate_limit import rate_limit
 
 class KnowledgeBaseService:
@@ -17,78 +19,137 @@ class KnowledgeBaseService:
         self.db = db
         self.session_manager = SessionManager()
 
-    async def create(self, kb_in: KnowledgeBaseCreate, owner_id: int) -> KnowledgeBase:
+    async def create(self, kb_in: KnowledgeBaseCreate, user_id: int) -> KnowledgeBase:
+        """创建新知识库
+
+        Args:
+            kb_in (KnowledgeBaseCreate): 知识库创建模型
+            user_id (int): 要绑定的普通用户ID
+
+        Returns:
+            KnowledgeBase: 创建成功的知识库对象
+
+        Raises:
+            ValueError: 当用户不存在、已绑定知识库或无权限时抛出
+        """
+        # 检查用户是否存在且未绑定知识库
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("User not found")
+
+        if user.is_admin:
+            raise ValueError("Cannot bind knowledge base to admin user")
+
         # 检查用户是否已经绑定了知识库
-        existing_kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.owner_id == owner_id).first()
-        if existing_kb:
+        if self.db.query(KnowledgeBase).filter(KnowledgeBase.owner_id == user_id).first():
             raise ValueError("User already has a knowledge base")
-            
+
+        # 验证管理员权限
+        admin_user = self.db.query(User).filter(User.id == user.created_by_id).first()
+        if not admin_user or not admin_user.is_admin:
+            raise ValueError("User was not created by an admin user")
+
         # 创建工作目录
-        working_dir = Path(f"workspaces/kb_{owner_id}_{kb_in.name}")
-        working_dir.mkdir(parents=True, exist_ok=True)
-        
+        working_dir = f"kb_{user_id}"
+
+        # 创建知识库
         kb = KnowledgeBase(
             name=kb_in.name,
-            owner_id=owner_id,
             domain=kb_in.domain,
             example_queries=kb_in.example_queries,
             entity_types=kb_in.entity_types,
-            model_config=kb_in.model_config.model_dump(),
-            working_dir=str(working_dir)
+            model_config=kb_in.model_config.dict(),
+            working_dir=working_dir,
+            owner_id=user_id
         )
+
         self.db.add(kb)
         self.db.commit()
         self.db.refresh(kb)
+
         return kb
 
-    async def update(
-        self,
-        kb_id: int,
-        kb_in: KnowledgeBaseUpdate,
-        owner_id: int
-    ) -> Optional[KnowledgeBase]:
-        kb = self.db.query(KnowledgeBase).filter(
-            KnowledgeBase.id == kb_id,
-            KnowledgeBase.owner_id == owner_id
-        ).first()
-        
+    async def train(self, kb_id: int) -> KnowledgeBase:
+        """训练知识库
+
+        Args:
+            kb_id (int): 知识库ID
+
+        Returns:
+            KnowledgeBase: 更新后的知识库对象
+
+        Raises:
+            ValueError: 当知识库不存在或不能训练时抛出
+        """
+        kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
         if not kb:
-            return None
-            
-        update_data = kb_in.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            if isinstance(value, dict):
-                current_value = getattr(kb, field) or {}
-                current_value.update(value)
-                value = current_value
-            setattr(kb, field, value)
-            
+            raise ValueError("Knowledge base not found")
+
+        if not kb.can_train:
+            raise ValueError("Knowledge base cannot be trained in current status")
+
+        # 获取知识库的所有未删除文档
+        documents = self.db.query(Document).filter(
+            Document.knowledge_base_id == kb_id,
+            Document.is_deleted == False
+        ).all()
+
+        if not documents:
+            raise ValueError("No documents available for training")
+
+        # 更新训练状态
+        kb.training_status = TrainingStatus.TRAINING
+        kb.training_started_at = datetime.now()
+        kb.training_error = None
         self.db.commit()
-        self.db.refresh(kb)
-        
-        # 如果更新了模型配置，需要清理会话
-        if "model_config" in update_data:
-            await self.session_manager.remove_session(str(kb_id))
+
+        try:
+            # 获取会话并开始训练
+            session = await self.session_manager.get_session(
+                str(kb_id),
+                kb.model_config
+            )
             
+            # 处理所有文档
+            for doc in documents:
+                session.grag.add_document(doc.content)
+
+            # 训练完成后更新状态
+            kb.training_status = TrainingStatus.TRAINED
+            kb.training_finished_at = datetime.now()
+
+        except Exception as e:
+            # 训练失败时更新状态
+            kb.training_status = TrainingStatus.FAILED
+            kb.training_error = str(e)
+            raise
+
+        finally:
+            self.db.commit()
+            self.db.refresh(kb)
+
         return kb
 
     async def query(self, kb_id: int, request: QueryRequest) -> QueryResponse:
         kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
         if not kb:
             raise ValueError("Knowledge base not found")
-            
-        # 获取或创建会话
+
+        if not kb.can_query:
+            raise ValueError("Knowledge base is not ready for querying")
+
+        # 获取会话
         session = await self.session_manager.get_session(
             str(kb_id),
             kb.model_config
         )
-        
+
         # 执行查询
         result = session.grag.query(
             request.query,
-            params=request.dict(exclude={'query'})
+            params=request.dict(exclude={"query"})
         )
-        
+
         return QueryResponse(
             response=result.response,
             context={
@@ -100,3 +161,35 @@ class KnowledgeBaseService:
 
     async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBase]:
         return self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+
+    async def update(self, kb_id: int, kb_update: KnowledgeBaseUpdate, admin_id: int) -> KnowledgeBase:
+        """更新知识库信息
+
+        Args:
+            kb_id (int): 知识库ID
+            kb_update (KnowledgeBaseUpdate): 知识库更新模型
+            admin_id (int): 管理员用户ID
+
+        Returns:
+            KnowledgeBase: 更新后的知识库对象
+
+        Raises:
+            ValueError: 当知识库不存在或管理员无权限时抛出
+        """
+        # 获取知识库
+        kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        if not kb:
+            raise ValueError("Knowledge base not found")
+
+        # 验证管理员权限
+        if kb.owner.created_by_id != admin_id:
+            raise ValueError("Admin user does not have permission to update this knowledge base")
+
+        # 更新数据
+        update_data = kb_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(kb, field, value)
+
+        self.db.commit()
+        self.db.refresh(kb)
+        return kb
