@@ -59,7 +59,7 @@ class KnowledgeBaseService:
             domain=kb_in.domain,
             example_queries=kb_in.example_queries,
             entity_types=kb_in.entity_types,
-            model_config=kb_in.model_config.dict(),
+            model_config=kb_in.model_config.model_dump(),
             working_dir=working_dir,
             owner_id=user_id
         )
@@ -146,7 +146,7 @@ class KnowledgeBaseService:
         # 执行查询
         result = session.grag.query(
             request.query,
-            params=request.dict(exclude={"query"})
+            params=request.model_dump(exclude={"query"})
         )
 
         return QueryResponse(

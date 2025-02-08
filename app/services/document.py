@@ -120,7 +120,7 @@ class DocumentService:
         if not doc:
             raise NotFoundError("Document not found")
 
-        update_data = doc_in.dict(exclude_unset=True)
+        update_data = doc_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(doc, field, value)
 
