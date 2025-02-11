@@ -4,17 +4,27 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 import os
 
-# 确保数据库文件所在目录存在
-db_path = os.path.abspath("./app.db")
-db_dir = os.path.dirname(db_path)
-if not os.path.exists(db_dir):
-    os.makedirs(db_dir)
 
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+
+# 创建数据库引擎
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False}  # 仅用于SQLite
+)
+
+# 创建会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# 声明基类
 Base = declarative_base()
 
+# 创建所有表的函数
+def create_tables():
+    Base.metadata.create_all(bind=engine)
+
+
+
+# 获取数据库会话
 def get_db():
     db = SessionLocal()
     try:

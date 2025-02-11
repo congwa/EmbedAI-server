@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import admin, client
-from app.models.database import Base, engine
+from app.models.database import create_tables
 from app.core.exceptions import (
     HTTPException,
     ValidationError,
@@ -16,6 +15,7 @@ from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware
 from app.core.logger import Logger
 
 from fast_graphrag import GraphRAG, QueryParam
+from app.models import *  # 导入所有模型
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
     #     print(f"- {chunk}")
 
 # 创建数据库表
-Base.metadata.create_all(bind=engine)
+create_tables()
 
 # 初始化应用
 app = FastAPI(
@@ -90,14 +90,15 @@ app.add_middleware(
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 
-# 注册路由
-app.include_router(admin.router, prefix=settings.API_V1_STR)
-app.include_router(client.router, prefix=settings.API_V1_STR)
+# 注册主路由
+from app.api.v1 import api_router
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 启动事件
 @app.on_event("startup")
 async def startup_event():
     Logger.info("Application starting up...")
+    create_tables()  # 在应用启动时创建数据库表
 
 # 关闭事件
 @app.on_event("shutdown")

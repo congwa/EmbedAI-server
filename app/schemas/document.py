@@ -42,7 +42,7 @@ class DocumentInDB(DocumentBase):
     created_by_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class DocumentResponse(DocumentInDB):
     """文档响应模型

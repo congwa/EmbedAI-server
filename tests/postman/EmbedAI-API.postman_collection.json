@@ -40,9 +40,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/login",
+              "raw": "{{base_url}}/api/v1/admin/login",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "login"]
+              "path": ["api", "v1", "admin", "login"]
             },
             "body": {
               "mode": "urlencoded",

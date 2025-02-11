@@ -1,5 +1,6 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from .database import Base
 
 class User(Base):
@@ -13,6 +14,7 @@ class User(Base):
     sdk_key = Column(String, unique=True, index=True)
     secret_key = Column(String)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
 
     # 关系定义
     created_by = relationship("User", remote_side=[id], backref="created_users")

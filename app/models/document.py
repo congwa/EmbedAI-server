@@ -27,8 +27,8 @@ class Document(Base):
     title = Column(String(255), nullable=False, comment="文档标题")
     content = Column(String, nullable=False, comment="文档内容")
     doc_type = Column(SQLAlchemyEnum(DocumentType), nullable=False, comment="文档类型")
-    created_at = Column(DateTime, default=datetime.utcnow, comment="创建时间")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
     is_deleted = Column(Boolean, default=False, comment="是否删除")
     
     # 外键关联

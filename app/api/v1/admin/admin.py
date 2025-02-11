@@ -12,7 +12,7 @@ from app.core.security import get_password_hash
 from app.schemas.user import UserCreate
 from app.services.user import UserService
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(tags=["admin"])
 
 @router.post("/register")
 async def register_admin(
@@ -33,30 +33,55 @@ async def register_admin(
     Raises:
         HTTPException: 当注册码无效或邮箱已存在时抛出相应错误
     """
-    if admin_data.register_code != settings.ADMIN_REGISTER_CODE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid register code"
+    try:
+        # 验证注册码
+        if admin_data.register_code != settings.ADMIN_REGISTER_CODE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid register code"
+            )
+
+        # 检查邮箱是否已存在
+        if db.query(User).filter(User.email == admin_data.email).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+
+        # 创建管理员用户
+        user = User(
+            email=admin_data.email,
+            hashed_password=get_password_hash(admin_data.password),
+            is_admin=True,
         )
+        
+        try:
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error: {str(e)}"
+            )
 
-    # 检查邮箱是否已存在
-    if db.query(User).filter(User.email == admin_data.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+        return APIResponse.success(
+            message="Admin user created successfully",
+            data={
+                "id": user.id,
+                "email": user.email,
+                "is_admin": user.is_admin
+            }
         )
-
-    # 创建管理员用户
-    user = User(
-        email=admin_data.email,
-        hashed_password=get_password_hash(admin_data.password),
-        is_admin=True
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return APIResponse.success(message="Admin user created successfully")
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
 
 @router.post("/knowledge-bases")
 async def create_knowledge_base(

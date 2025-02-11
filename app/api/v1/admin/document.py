@@ -1,16 +1,19 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from app.core.response import Response
+from app.core.response import APIResponse
 from app.models.user import User
 from app.models.database import get_db
 from app.services.document import DocumentService
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPagination
 from app.core.decorators import admin_required
+from app.schemas.document import DocumentType
+from datetime import datetime
+from app.schemas.document import DocumentResponse
 
-router = APIRouter()
+router = APIRouter(tags=["admin"])
 
-@router.post("/documents", response_model=Response)
+@router.post("/documents")
 @admin_required
 async def create_document(
     *,
@@ -28,13 +31,13 @@ async def create_document(
         db (Session): 数据库会话
 
     Returns:
-        Response: 统一响应格式，包含创建的文档信息
+        APIResponse: 统一响应格式，包含创建的文档信息
     """
     document_service = DocumentService(db)
     doc = await document_service.create(doc_in, knowledge_base_id, current_user.id)
-    return Response(data=doc)
+    return APIResponse.success(data=doc)
 
-@router.get("/documents", response_model=Response[DocumentPagination])
+@router.get("/documents")
 @admin_required
 async def get_documents(
     knowledge_base_id: int = Query(..., description="知识库ID"),
@@ -55,7 +58,7 @@ async def get_documents(
         db (Session): 数据库会话
 
     Returns:
-        Response[DocumentPagination]: 统一响应格式，包含分页的文档列表
+        APIResponse[DocumentPagination]: 统一响应格式，包含分页的文档列表
     """
     document_service = DocumentService(db)
     docs = await document_service.get_multi(
@@ -67,9 +70,9 @@ async def get_documents(
         start_time=start_time,
         end_time=end_time
     )
-    return Response(data=docs)
+    return APIResponse.success(data=docs)
 
-@router.put("/documents/{doc_id}", response_model=Response)
+@router.put("/documents/{doc_id}")
 @admin_required
 async def update_document(
     doc_id: int,
@@ -84,13 +87,13 @@ async def update_document(
         db (Session): 数据库会话
 
     Returns:
-        Response: 统一响应格式，包含更新后的文档信息
+        APIResponse: 统一响应格式，包含更新后的文档信息
     """
     document_service = DocumentService(db)
     doc = await document_service.update(doc_id, doc_in)
-    return Response(data=doc)
+    return APIResponse.success(data=doc)
 
-@router.delete("/documents/{doc_id}", response_model=Response)
+@router.delete("/documents/{doc_id}")
 @admin_required
 async def delete_document(
     doc_id: int,
@@ -103,8 +106,8 @@ async def delete_document(
         db (Session): 数据库会话
 
     Returns:
-        Response: 统一响应格式，包含被删除的文档信息
+        APIResponse: 统一响应格式，包含被删除的文档信息
     """
     document_service = DocumentService(db)
     doc = await document_service.delete(doc_id)
-    return Response(data=doc)
+    return APIResponse.success(data=doc)
