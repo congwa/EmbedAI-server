@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
+    # Admin configuration
+    ADMIN_REGISTER_CODE: str = "123456"  # Add this line - you should change this in production
+    
     # Redis配置
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

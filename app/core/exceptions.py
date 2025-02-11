@@ -111,17 +111,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    """SQLAlchemy异常处理器
-
-    处理所有数据库相关异常，返回统一格式的错误响应
-
-    Args:
-        request (Request): FastAPI请求对象
-        exc (SQLAlchemyError): SQLAlchemy异常实例
-
-    Returns:
-        APIResponse: 统一格式的错误响应
-    """
+    """SQLAlchemy异常处理器"""
+    error_msg = f"Database error: {str(exc)}"
     return APIResponse.error(
         message="Database error occurred",
         code=status.HTTP_500_INTERNAL_SERVER_ERROR

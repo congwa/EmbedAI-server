@@ -1,0 +1,274 @@
+{
+  "info": {
+    "name": "EmbedAI-API",
+    "description": "EmbedAI Server API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "管理员接口",
+      "item": [
+        {
+          "name": "管理员注册",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"admin123\",\n    \"register_code\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "管理员登录",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "login"]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "admin@example.com"
+                },
+                {
+                  "key": "password",
+                  "value": "your_password"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "创建普通用户",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"user_password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "创建知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/knowledge-bases?user_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "knowledge-bases"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"测试知识库\",\n    \"description\": \"这是一个测试知识库\"\n}"
+            }
+          }
+        },
+        {
+          "name": "更新知识库",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/knowledge-bases/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "knowledge-bases", "1"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"更新后的知识库名称\",\n    \"description\": \"更新后的描述\"\n}"
+            }
+          }
+        },
+        {
+          "name": "训练知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/knowledge-bases/1/train",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "knowledge-bases", "1", "train"]
+            }
+          }
+        },
+        {
+          "name": "创建文档",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/documents?knowledge_base_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "documents"],
+              "query": [
+                {
+                  "key": "knowledge_base_id",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"测试文档\",\n    \"content\": \"这是测试文档的内容\"\n}"
+            }
+          }
+        },
+        {
+          "name": "获取文档列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/documents?knowledge_base_id=1&skip=0&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "documents"],
+              "query": [
+                {
+                  "key": "knowledge_base_id",
+                  "value": "1"
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "客户端接口",
+      "item": [
+        {
+          "name": "查询知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "sdk_key",
+                "value": "{{sdk_key}}"
+              },
+              {
+                "key": "timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "nonce",
+                "value": "{{nonce}}"
+              },
+              {
+                "key": "signature",
+                "value": "{{signature}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/client/query/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "client", "query", "1"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"query\": \"这是一个测试查询\",\n    \"top_k\": 5\n}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}

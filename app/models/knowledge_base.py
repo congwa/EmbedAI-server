@@ -30,6 +30,7 @@ class KnowledgeBase(Base):
     queued_at = Column(DateTime, nullable=True)
     
     owner = relationship("User", back_populates="knowledge_base", uselist=False)
+    documents = relationship("Document", back_populates="knowledge_base", cascade="all, delete-orphan")
     
     @property
     def can_train(self) -> bool:
