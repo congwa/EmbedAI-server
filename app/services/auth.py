@@ -113,7 +113,7 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
     # 验证时间戳（5分钟有效期）
     try:
         ts = int(headers['timestamp'])
-        current_time = int(time.time())
+        current_time = datetime.now().timestamp()
         if abs(current_time - ts) > 300:
             return False, None, "Request timestamp expired"
     except ValueError:

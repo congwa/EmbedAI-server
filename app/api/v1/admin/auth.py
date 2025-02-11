@@ -4,7 +4,7 @@ from app.models.database import get_db
 from app.services.auth import authenticate_user
 from app.core.security import create_access_token
 from app.core.response import APIResponse
-from app.schemas.user import Token
+from app.schemas.user import Token, UserInfo
 from app.schemas.auth import OAuth2EmailPasswordRequestForm
 
 router = APIRouter(tags=["admin"])
@@ -38,15 +38,16 @@ async def login(
     
     access_token = create_access_token(data={"sub": user.email})
     
-    # 构建用户信息响应，只返回确保存在的字段
-    user_info = {
-        "id": user.id,
-        "email": user.email,
-        "is_admin": user.is_admin,
-    }
+    # 使用 Pydantic 模型创建响应
+    print(user.created_at)
+    token_response = Token(
+        access_token=access_token,
+        user=UserInfo(
+            id=user.id,
+            email=user.email,
+            is_admin=user.is_admin,
+            created_at=user.created_at
+        )
+    )
         
-    return APIResponse.success(data={
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user_info
-    })
+    return APIResponse.success(data=token_response.model_dump())
