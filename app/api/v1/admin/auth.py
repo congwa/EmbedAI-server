@@ -28,7 +28,7 @@ async def login(
     Raises:
         HTTPException: 当用户名或密码错误时抛出401认证错误
     """
-    user = await authenticate_user(db, form_data.username, form_data.password)
+    user = await authenticate_user(db, form_data.email, form_data.password)
     if not user or not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

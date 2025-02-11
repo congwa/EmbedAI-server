@@ -48,7 +48,7 @@
               "mode": "urlencoded",
               "urlencoded": [
                 {
-                  "key": "username",
+                  "key": "email",
                   "value": "admin@example.com"
                 },
                 {
