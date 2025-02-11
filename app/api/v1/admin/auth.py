@@ -50,4 +50,4 @@ async def login(
         )
     )
         
-    return APIResponse.success(data=token_response.model_dump())
+    return APIResponse.success(data=token_response.model_dump(mode="json"))
