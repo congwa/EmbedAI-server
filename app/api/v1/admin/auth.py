@@ -39,5 +39,11 @@ async def login(
     access_token = create_access_token(data={"sub": user.email})
     return APIResponse.success(data={
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "is_admin": user.is_admin,
+            "created_at": user.created_at
+        }
     })
