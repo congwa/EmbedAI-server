@@ -2,38 +2,38 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import asyncio
 from fast_graphrag import GraphRAG
-from app.core.logger import logger
+from app.core.logger import Logger
 
 class GraphRAGSession:
-    def __init__(self, kb_id: str, model_config: dict):
+    def __init__(self, kb_id: str, llm_config: dict):
         self.kb_id = kb_id
-        self.grag = self._init_graphrag(model_config)
+        self.grag = self._init_graphrag(llm_config)
         self.last_active = datetime.now()
     
-    def _init_graphrag(self, model_config: dict) -> GraphRAG:
+    def _init_graphrag(self, llm_config: dict) -> GraphRAG:
         from fast_graphrag import GraphRAG
         from fast_graphrag._llm import OpenAIEmbeddingService, OpenAILLMService
         import instructor
         
         return GraphRAG(
             working_dir=f"workspaces/kb_{self.kb_id}",
-            domain=model_config.get("domain", "通用知识领域"),
-            example_queries="\n".join(model_config.get("example_queries", [])),
-            entity_types=model_config.get("entity_types", []),
+            domain=llm_config.get("domain", "通用知识领域"),
+            example_queries="\n".join(llm_config.get("example_queries", [])),
+            entity_types=llm_config.get("entity_types", []),
             config=GraphRAG.Config(
                 llm_service=OpenAILLMService(
-                    model=model_config["llm"]["model"],
-                    base_url=model_config["llm"]["base_url"],
-                    api_key=model_config["llm"]["api_key"],
+                    model=llm_config["llm"]["model"],
+                    base_url=llm_config["llm"]["base_url"],
+                    api_key=llm_config["llm"]["api_key"],
                     mode=instructor.Mode.JSON,
                     client="openai"
                 ),
                 embedding_service=OpenAIEmbeddingService(
-                    model=model_config["embeddings"]["model"],
-                    base_url=model_config["embeddings"]["base_url"],
-                    api_key=model_config["embeddings"]["api_key"],
+                    model=llm_config["embeddings"]["model"],
+                    base_url=llm_config["embeddings"]["base_url"],
+                    api_key=llm_config["embeddings"]["api_key"],
                     client="openai",
-                    embedding_dim=model_config["embeddings"]["embedding_dim"],
+                    embedding_dim=llm_config["embeddings"]["embedding_dim"],
                 ),
             ),
         )
@@ -56,7 +56,7 @@ class GraphRAGSession:
                 show_progress=True
             )
         except Exception as e:
-            logger.error(f"训练过程出错: {e}")
+            Logger.error(f"训练过程出错: {e}")
             raise e
 
 class SessionManager:
@@ -73,9 +73,9 @@ class SessionManager:
         if self.cleanup_task is None:
             self.cleanup_task = asyncio.create_task(self._cleanup_inactive_sessions())
     
-    async def get_session(self, kb_id: str, model_config: dict) -> GraphRAGSession:
+    async def get_session(self, kb_id: str, llm_config: dict) -> GraphRAGSession:
         if kb_id not in self.sessions:
-            self.sessions[kb_id] = GraphRAGSession(kb_id, model_config)
+            self.sessions[kb_id] = GraphRAGSession(kb_id, llm_config)
         self.sessions[kb_id].last_active = datetime.now()
         return self.sessions[kb_id]
     

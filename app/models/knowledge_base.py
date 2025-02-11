@@ -17,9 +17,9 @@ class KnowledgeBase(Base):
     name = Column(String, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), unique=True)
     domain = Column(String, default="通用知识领域")
-    example_queries = Column(ARRAY(String), default=[])
-    entity_types = Column(ARRAY(String), default=[])
-    model_config = Column(JSON)
+    example_queries = Column(JSON, default=lambda: [])
+    entity_types = Column(JSON, default=lambda: [])
+    llm_config = Column(JSON)
     working_dir = Column(String)
     
     # 训练相关字段

@@ -59,7 +59,7 @@ class KnowledgeBaseService:
             domain=kb_in.domain,
             example_queries=kb_in.example_queries,
             entity_types=kb_in.entity_types,
-            model_config=kb_in.model_config.model_dump(),
+            llm_config=kb_in.llm_config.model_dump(),
             working_dir=working_dir,
             owner_id=user_id
         )
@@ -140,7 +140,7 @@ class KnowledgeBaseService:
         # 获取会话
         session = await self.session_manager.get_session(
             str(kb_id),
-            kb.model_config
+            kb.llm_config
         )
 
         # 执行查询

@@ -1,4 +1,4 @@
-# EmbedAI
+# EmbedAI-server
 
 随处可用的智能知识助手系统，基于图数据库和大语言模型，提供高性能的知识检索和智能问答服务。
 
@@ -92,7 +92,7 @@
   - domain：领域描述
   - example_queries：示例查询
   - entity_types：实体类型
-  - model_config：模型配置
+  - llm_config：模型配置
 
 #### 训练知识库
 

@@ -1,0 +1,8 @@
+2025-02-11 14:36:33,505 - graphrag_api - INFO - Application starting up...
+2025-02-11 14:36:38,947 - graphrag_api - INFO - Request: GET http://localhost:8000/?ide_webview_request_time=1739255798910
+2025-02-11 14:36:38,948 - graphrag_api - INFO - Response: GET http://localhost:8000/?ide_webview_request_time=1739255798910 - Status: 404 - Process Time: 0.00s
+2025-02-11 14:36:46,627 - graphrag_api - INFO - Request: GET http://localhost:8000/
+2025-02-11 14:36:46,632 - graphrag_api - INFO - Response: GET http://localhost:8000/ - Status: 404 - Process Time: 0.01s
+2025-02-11 14:36:47,281 - graphrag_api - INFO - Request: GET http://localhost:8000/favicon.ico
+2025-02-11 14:36:47,282 - graphrag_api - INFO - Response: GET http://localhost:8000/favicon.ico - Status: 404 - Process Time: 0.00s
+2025-02-11 14:37:29,705 - graphrag_api - INFO - Application shutting down...

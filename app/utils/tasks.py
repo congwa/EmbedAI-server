@@ -48,7 +48,7 @@ def train_knowledge_base(kb_id: int):
             # 使用同步方式获取会话
             session = session_manager.get_session_sync(
                 str(kb_id),
-                kb.model_config
+                kb.llm_config
             )
             
             # 更新训练状态
