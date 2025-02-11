@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     
     # 数据库配置
-    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_URL: str = "sqlite:///./embed_ai.db"
     
     # JWT配置
     SECRET_KEY: str = "123456"
