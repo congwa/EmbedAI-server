@@ -13,6 +13,7 @@ from app.core.exceptions import (
 )
 from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware
 from app.core.logger import Logger
+from contextlib import asynccontextmanager
 
 from fast_graphrag import GraphRAG, QueryParam
 from app.models import *  # 导入所有模型
@@ -66,11 +67,22 @@ def main():
 # 创建数据库表
 create_tables()
 
-# 初始化应用
+# 1. 使用新的 lifespan 方式替代 on_event
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时执行
+    Logger.info("Application starting up...")
+    create_tables()
+    yield
+    # 关闭时执行
+    Logger.info("Application shutting down...")
+
+# 2. 在创建 FastAPI 实例时指定 lifespan
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # 注册异常处理器
@@ -94,17 +106,13 @@ app.add_middleware(RequestValidationMiddleware)
 from app.api.v1 import api_router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# 启动事件
-@app.on_event("startup")
-async def startup_event():
-    Logger.info("Application starting up...")
-    create_tables()  # 在应用启动时创建数据库表
-
-# 关闭事件
-@app.on_event("shutdown")
-async def shutdown_event():
-    Logger.info("Application shutting down...")
-
+# 3. 修改 uvicorn.run 的调用方式
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        workers=1
+    )
