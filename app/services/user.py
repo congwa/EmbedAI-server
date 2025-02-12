@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserListItem
 from sqlalchemy import select
 from sqlalchemy.sql import func
+from app.core.exceptions import ValidationError
 
 class UserService:
     """用户服务类
@@ -42,7 +43,14 @@ class UserService:
 
         Returns:
             User: 创建成功的用户对象
+            
+        Raises:
+            ValidationError: 当邮箱已存在时抛出验证错误
         """
+        # 检查邮箱是否已存在
+        if self.db.query(User).filter(User.email == user_in.email).first():
+            raise ValidationError(f"Email {user_in.email} is already registered")
+            
         sdk_key = None
         secret_key = None
         if not user_in.is_admin and created_by_id:
@@ -124,6 +132,6 @@ class UserService:
         users = query.offset(offset).limit(page_size).all()
         
         # 转换为 schema 模型
-        user_list = [UserListItem.model_validate(user) for user in users]
+        user_list = [UserListItem.model_validate(user).model_dump(mode="json") for user in users]
             
         return user_list, total

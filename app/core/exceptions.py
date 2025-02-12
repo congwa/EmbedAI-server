@@ -105,17 +105,32 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     Returns:
         APIResponse: 统一格式的错误响应
     """
+    print(f"HTTP Exception occurred: {exc.detail}")  # 打印错误详情
+    print(f"Status code: {exc.status_code}")  # 打印状态码
+    print(f"Headers: {exc.headers}")  # 打印头信息
     return APIResponse.error(
         message=exc.detail,
-        code=exc.status_code
+        code=exc.status_code,
+        data={
+            "error_type": "HTTPException",
+            "headers": exc.headers,
+            "path": str(request.url)
+        }
     )
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """SQLAlchemy异常处理器"""
     error_msg = f"Database error: {str(exc)}"
+    print(f"Database error occurred: {error_msg}")  # 打印数据库错误
+    print(f"Error type: {type(exc)}")  # 打印错误类型
     return APIResponse.error(
-        message="Database error occurred",
-        code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        message=error_msg,
+        code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        data={
+            "error_type": "DatabaseError",
+            "error_details": str(exc),
+            "path": str(request.url)
+        }
     )
 
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -130,9 +145,14 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
     Returns:
         APIResponse: 统一格式的错误响应
     """
+    print(f"Validation error occurred: {exc.detail}")  # 打印验证错误
     return APIResponse.error(
         message=exc.detail,
-        code=exc.status_code
+        code=exc.status_code,
+        data={
+            "error_type": "ValidationError",
+            "path": str(request.url)
+        }
     )
 
 async def generic_exception_handler(request: Request, exc: Exception):
@@ -147,7 +167,16 @@ async def generic_exception_handler(request: Request, exc: Exception):
     Returns:
         APIResponse: 统一格式的错误响应
     """
+    error_msg = f"An unexpected error occurred: {str(exc)}"
+    print(error_msg)  # 打印错误信息
+    print(f"Error type: {type(exc)}")  # 打印错误类型
+    print(f"Error details: {exc.__dict__}")  # 打印错误详情
     return APIResponse.error(
-        message="An unexpected error occurred",
-        code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        message=error_msg,
+        code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        data={
+            "error_type": str(type(exc).__name__),
+            "error_details": str(exc),
+            "path": str(request.url)
+        }
     )

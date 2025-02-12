@@ -7,7 +7,7 @@ from app.schemas.admin import AdminRegister
 from app.models.user import User
 from app.core.config import settings
 from app.core.security import get_password_hash
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserResponse
 from app.services.user import UserService
 
 router = APIRouter(tags=["admin"])
@@ -102,7 +102,9 @@ async def create_user(
     """
     user_service = UserService(db)
     result = await user_service.create(user_data, current_user.id)
-    return APIResponse.success(data=result)
+    # 将SQLAlchemy模型转换为Pydantic模型
+    response_data = UserResponse.model_validate(result)
+    return APIResponse.success(data=response_data.model_dump(mode="json"))
 
 @router.get("/users", dependencies=[Depends(get_current_admin_user)])
 async def list_users(

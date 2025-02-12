@@ -59,15 +59,25 @@ async def get_current_user(
     )
     try:
         print("Received token:", token)  # 打印收到的 token
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        print("Decoded payload:", payload)  # 打印解码后的 payload
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            print("Decoded payload:", payload)  # 打印解码后的 payload
+        except Exception as e:
+            print(f"Token decode error: {str(e)}")  # 打印具体的解码错误
+            print(f"Error type: {type(e)}")  # 打印错误类型
+            print(f"Error details: {e.__dict__}")  # 打印错误详情
+            raise credentials_exception
+            
         email: str = payload.get("sub")
         print("Email from token:", email)  # 打印获取的邮箱
         if email is None:
+            print("Email is None in payload")  # 打印邮箱为空的情况
             raise credentials_exception
         token_data = TokenData(email=email)
-    except JWTError:
-        print("JWTError occurred", JWTError)  # 打印错误信息
+    except JWTError as e:
+        print(f"JWT Error occurred: {str(e)}")  # 打印JWT错误信息
+        print(f"JWT Error type: {type(e)}")  # 打印JWT错误类型
+        print(f"JWT Error details: {e.__dict__}")  # 打印JWT错误详情
         raise credentials_exception
         
     user = db.query(User).filter(User.email == token_data.email).first()
