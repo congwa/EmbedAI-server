@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -66,6 +66,13 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class AdminChangeUserPasswordRequest(BaseModel):
+    """管理员修改用户密码请求模型"""
+    new_password: str = Field(..., min_length=6, description="新密码，最小长度为6个字符")
 
     class Config:
         from_attributes = True

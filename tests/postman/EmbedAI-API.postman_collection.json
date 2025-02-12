@@ -284,6 +284,72 @@
               ]
             }
           }
+        },
+        {
+          "name": "管理员修改用户密码",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/1/password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", "1", "password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"new_password\": \"new_password123\"\n}"
+            },
+            "description": "管理员修改普通用户密码"
+          },
+          "response": [
+            {
+              "name": "成功响应",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users/1/password"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"new_password\": \"new_password123\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "success": true,
+                "code": 200,
+                "message": "Password updated successfully",
+                "data": null
+              }
+            }
+          ]
         }
       ]
     },

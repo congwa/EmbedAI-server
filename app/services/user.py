@@ -135,3 +135,25 @@ class UserService:
         user_list = [UserListItem.model_validate(user).model_dump(mode="json") for user in users]
             
         return user_list, total
+
+    async def admin_change_user_password(self, user_id: int, new_password: str) -> bool:
+        """管理员修改用户密码
+
+        Args:
+            user_id (int): 用户ID
+            new_password (str): 新密码
+
+        Returns:
+            bool: 修改成功返回True，否则返回False
+            
+        Raises:
+            ValidationError: 当用户不存在时抛出验证错误
+        """
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValidationError("User not found")
+            
+        # 更新新密码
+        user.hashed_password = get_password_hash(new_password)
+        self.db.commit()
+        return True
