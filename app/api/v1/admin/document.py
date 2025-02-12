@@ -6,20 +6,19 @@ from app.models.user import User
 from app.models.database import get_db
 from app.services.document import DocumentService
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPagination
-from app.core.decorators import admin_required
+from app.services.auth import get_current_admin_user
 from app.schemas.document import DocumentType
 from datetime import datetime
 from app.schemas.document import DocumentResponse
 
 router = APIRouter(tags=["admin"])
 
-@router.post("/documents")
-@admin_required
+@router.post("/documents", dependencies=[Depends(get_current_admin_user)])
 async def create_document(
     *,
     doc_in: DocumentCreate,
     knowledge_base_id: int = Query(..., description="知识库ID"),
-    current_user: User = Depends(admin_required),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
     """创建新文档（仅管理员）
@@ -37,8 +36,7 @@ async def create_document(
     doc = await document_service.create(doc_in, knowledge_base_id, current_user.id)
     return APIResponse.success(data=doc)
 
-@router.get("/documents")
-@admin_required
+@router.get("/documents", dependencies=[Depends(get_current_admin_user)])
 async def get_documents(
     knowledge_base_id: int = Query(..., description="知识库ID"),
     skip: int = Query(0, description="分页偏移量"),
@@ -72,8 +70,7 @@ async def get_documents(
     )
     return APIResponse.success(data=docs)
 
-@router.put("/documents/{doc_id}")
-@admin_required
+@router.put("/documents/{doc_id}", dependencies=[Depends(get_current_admin_user)])
 async def update_document(
     doc_id: int,
     doc_in: DocumentUpdate,
@@ -93,8 +90,7 @@ async def update_document(
     doc = await document_service.update(doc_id, doc_in)
     return APIResponse.success(data=doc)
 
-@router.delete("/documents/{doc_id}")
-@admin_required
+@router.delete("/documents/{doc_id}", dependencies=[Depends(get_current_admin_user)])
 async def delete_document(
     doc_id: int,
     db: Session = Depends(get_db)

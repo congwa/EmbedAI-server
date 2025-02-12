@@ -85,6 +85,72 @@
           }
         },
         {
+          "name": "获取用户列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "页码，从1开始"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10",
+                  "description": "每页显示数量，1-100之间"
+                }
+              ]
+            },
+            "description": "获取当前管理员创建的所有普通用户列表，支持分页查询"
+          },
+          "response": [
+            {
+              "name": "成功响应",
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users?page=1&page_size=10"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": {
+                "success": true,
+                "code": 200,
+                "message": "获取用户列表成功",
+                "data": {
+                  "items": [
+                    {
+                      "id": 1,
+                      "email": "user@example.com",
+                      "sdk_key": "sdk_xxx",
+                      "secret_key": "sk_xxx",
+                      "is_active": true,
+                      "created_at": "2024-02-11T12:00:00"
+                    }
+                  ],
+                  "pagination": {
+                    "total": 1,
+                    "page": 1,
+                    "page_size": 10
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
           "name": "创建知识库",
           "request": {
             "method": "POST",

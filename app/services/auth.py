@@ -8,10 +8,13 @@ from app.core.security import verify_password, verify_signature
 from app.models.database import get_db
 from app.models.user import User
 from app.schemas.user import TokenData
-from app.core.response import APIResponse
+from datetime import datetime
 
 # 配置OAuth2密码Bearer认证方案，指定token获取的URL端点
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/admin/login",
+    auto_error=True  # 当请求没有token时自动返回401错误
+)
 
 async def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     """用户认证函数
@@ -55,12 +58,16 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        print("Received token:", token)  # 打印收到的 token
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        print("Decoded payload:", payload)  # 打印解码后的 payload
         email: str = payload.get("sub")
+        print("Email from token:", email)  # 打印获取的邮箱
         if email is None:
             raise credentials_exception
         token_data = TokenData(email=email)
     except JWTError:
+        print("JWTError occurred", JWTError)  # 打印错误信息
         raise credentials_exception
         
     user = db.query(User).filter(User.email == token_data.email).first()

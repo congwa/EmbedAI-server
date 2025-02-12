@@ -1,9 +1,11 @@
-from typing import Optional
+from typing import Optional, List, Tuple
 import secrets
 from sqlalchemy.orm import Session
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserUpdate, UserListItem
+from sqlalchemy import select
+from sqlalchemy.sql import func
 
 class UserService:
     """用户服务类
@@ -96,3 +98,32 @@ class UserService:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    async def get_users(self, page: int, page_size: int, admin_id: int) -> Tuple[List[UserListItem], int]:
+        """获取用户列表
+
+        Args:
+            page (int): 页码，从1开始
+            page_size (int): 每页显示的数量
+            admin_id (int): 管理员ID，用于筛选该管理员创建的用户
+
+        Returns:
+            Tuple[List[UserListItem], int]: 返回用户列表和总数
+        """
+        # 构建查询条件：非管理员用户 且 由指定管理员创建
+        query = self.db.query(User).filter(
+            User.is_admin == False,
+            User.created_by_id == admin_id
+        )
+        
+        # 计算总数
+        total = query.count()
+        
+        # 获取分页数据
+        offset = (page - 1) * page_size
+        users = query.offset(offset).limit(page_size).all()
+        
+        # 转换为 schema 模型
+        user_list = [UserListItem.model_validate(user) for user in users]
+            
+        return user_list, total
