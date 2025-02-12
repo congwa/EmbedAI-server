@@ -7,8 +7,9 @@ from app.schemas.admin import AdminRegister
 from app.models.user import User
 from app.core.config import settings
 from app.core.security import get_password_hash
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, AdminChangeUserPasswordRequest
 from app.services.user import UserService
+from app.core.decorators import admin_required
 
 router = APIRouter(tags=["admin"])
 
@@ -136,3 +137,33 @@ async def list_users(
         page_size=page_size,
         message="获取用户列表成功"
     )  
+
+@router.put("/users/{user_id}/password", dependencies=[Depends(get_current_admin_user)])
+async def admin_change_user_password(
+    user_id: int,
+    password_in: AdminChangeUserPasswordRequest,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """管理员修改普通用户密码
+    
+    Args:
+        user_id: 要修改密码的用户ID
+        password_in: 新密码信息
+        current_user: 当前管理员用户
+        db: 数据库会话
+    
+    Returns:
+        APIResponse: 修改结果
+        
+    Raises:
+        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+    """
+    user_service = UserService(db)
+    try:
+        success = await user_service.admin_change_user_password(user_id, password_in.new_password)
+        if success:
+            return APIResponse.success(message="Password updated successfully")
+        return APIResponse.error(code=400, message="Failed to update password")
+    except Exception as e:
+        return APIResponse.error(code=400, message=str(e)) 

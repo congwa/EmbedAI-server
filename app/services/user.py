@@ -137,7 +137,7 @@ class UserService:
         return user_list, total
 
     async def admin_change_user_password(self, user_id: int, new_password: str) -> bool:
-        """管理员修改用户密码
+        """管理员修改普通用户密码
 
         Args:
             user_id (int): 用户ID
