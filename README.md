@@ -2,6 +2,11 @@
 
 随处可用的智能知识助手系统，基于图数据库和大语言模型，提供高性能的知识检索和智能问答服务。
 
+## 配套项目
+
+- [EmbedAI-sdk h5端sdk](https://github.com/congwa/EmbedAI-sdk)
+- [EmbedAI-admin 后台管理端](https://github.com/congwa/EmbedAI-admin)
+
 ## 功能特性
 
 - **轻松植入**：提供多语言SDK和完整API，支持快速接入任何系统
@@ -177,3 +182,4 @@
 
 - [ ] 系统特性  - [x] 基于FastAPI的高性能异步处理
   - [ ] Docker一键部署支持
+
