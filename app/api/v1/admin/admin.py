@@ -105,7 +105,7 @@ async def create_user(
     result = await user_service.create(user_data, current_user.id)
     # 将SQLAlchemy模型转换为Pydantic模型
     response_data = UserResponse.model_validate(result)
-    return APIResponse.success(data=response_data.model_dump(mode="json"))
+    return APIResponse.success(data=response_data)
 
 @router.get("/users", dependencies=[Depends(get_current_admin_user)])
 async def list_users(

@@ -17,7 +17,7 @@ class Logger:
     @staticmethod
     def _setup_logger() -> logging.Logger:
         # 创建logger
-        logger = logging.getLogger("graphrag_api")
+        logger = logging.getLogger("fastapi")
         logger.setLevel(logging.INFO)
 
         # 创建格式化器

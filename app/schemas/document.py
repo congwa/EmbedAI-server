@@ -1,9 +1,10 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import Field
 from datetime import datetime
+from .base import CustomBaseModel
 from app.models.document import DocumentType
 
-class DocumentBase(BaseModel):
+class DocumentBase(CustomBaseModel):
     """文档基础模型
 
     定义文档的基本字段
@@ -11,6 +12,7 @@ class DocumentBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="文档标题")
     content: str = Field(..., min_length=1, description="文档内容")
     doc_type: DocumentType = Field(default=DocumentType.TEXT, description="文档类型")
+    kb_id: int = Field(..., description="所属知识库ID")
 
 class DocumentCreate(DocumentBase):
     """文档创建模型
@@ -19,7 +21,7 @@ class DocumentCreate(DocumentBase):
     """
     pass
 
-class DocumentUpdate(BaseModel):
+class DocumentUpdate(CustomBaseModel):
     """文档更新模型
 
     用于更新文档时的请求数据验证
@@ -34,15 +36,11 @@ class DocumentInDB(DocumentBase):
 
     用于从数据库中读取的文档数据
     """
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    is_deleted: bool
-    knowledge_base_id: int
-    created_by_id: int
-
-    class Config:
-        from_attributes = True
+    id: int = Field(..., description="文档ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    user_id: int = Field(..., description="创建者ID")
+    is_deleted: bool = Field(False, description="是否已删除")
 
 class DocumentResponse(DocumentInDB):
     """文档响应模型
@@ -51,7 +49,7 @@ class DocumentResponse(DocumentInDB):
     """
     pass
 
-class DocumentPagination(BaseModel):
+class DocumentPagination(CustomBaseModel):
     """文档分页响应模型
 
     用于返回分页的文档列表数据

@@ -9,9 +9,9 @@ from app.schemas.auth import OAuth2EmailPasswordRequestForm
 
 router = APIRouter(tags=["admin"])
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login(
-    form_data: OAuth2EmailPasswordRequestForm = Depends(),
+    form_data: OAuth2EmailPasswordRequestForm,
     db: Session = Depends(get_db)
 ):
     """管理员登录接口
@@ -50,4 +50,4 @@ async def login(
         )
     )
         
-    return APIResponse.success(data=token_response.model_dump(mode="json"))
+    return APIResponse.success(data=token_response)

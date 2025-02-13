@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from typing import Union, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.response import APIResponse
+from fastapi.exceptions import RequestValidationError
 
 class BaseAPIException(HTTPException):
     """基础API异常类
@@ -133,22 +134,34 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         }
     )
 
-async def validation_exception_handler(request: Request, exc: ValidationError):
+async def validation_exception_handler(request: Request, exc: Union[ValidationError, RequestValidationError]):
     """验证异常处理器
 
     处理所有数据验证相关异常，返回统一格式的错误响应
 
     Args:
         request (Request): FastAPI请求对象
-        exc (ValidationError): 验证异常实例
+        exc (Union[ValidationError, RequestValidationError]): 验证异常实例
 
     Returns:
         APIResponse: 统一格式的错误响应
     """
-    print(f"Validation error occurred: {exc.detail}")  # 打印验证错误
+    if isinstance(exc, RequestValidationError):
+        # 处理 FastAPI 的请求验证错误
+        errors = exc.errors()
+        error_messages = []
+        for error in errors:
+            field = " -> ".join(str(x) for x in error["loc"])
+            message = error["msg"]
+            error_messages.append(f"{field}: {message}")
+        detail = "\n".join(error_messages)
+    else:
+        # 处理自定义的验证错误
+        detail = exc.detail
+
     return APIResponse.error(
-        message=exc.detail,
-        code=exc.status_code,
+        message=detail,
+        code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         data={
             "error_type": "ValidationError",
             "path": str(request.url)

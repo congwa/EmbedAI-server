@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.core.security import verify_password, verify_signature
 from app.models.database import get_db
 from app.models.user import User
-from app.schemas.user import TokenData
+from app.schemas.auth import TokenData
 from datetime import datetime
 
 # 配置OAuth2密码Bearer认证方案，指定token获取的URL端点

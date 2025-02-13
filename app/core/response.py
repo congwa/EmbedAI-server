@@ -1,9 +1,24 @@
 from typing import Any, Optional, Dict, Union
 from fastapi.responses import JSONResponse
 from fastapi import status
+from pydantic import BaseModel
+from app.schemas.base import CustomBaseModel
 
 class APIResponse:
     """统一的API响应格式封装"""
+    
+    @staticmethod
+    def _process_data(data: Any) -> Any:
+        """处理响应数据，自动转换 Pydantic 模型"""
+        if isinstance(data, CustomBaseModel):
+            return data.model_dump()
+        elif isinstance(data, BaseModel):
+            return data.model_dump(mode='json')
+        elif isinstance(data, list):
+            return [APIResponse._process_data(item) for item in data]
+        elif isinstance(data, dict):
+            return {k: APIResponse._process_data(v) for k, v in data.items()}
+        return data
     
     @staticmethod
     def success(
@@ -18,7 +33,7 @@ class APIResponse:
                 "success": True,
                 "code": status_code,
                 "message": message,
-                "data": data
+                "data": APIResponse._process_data(data)
             }
         )
     

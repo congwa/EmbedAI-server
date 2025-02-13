@@ -131,7 +131,7 @@ class UserService:
         offset = (page - 1) * page_size
         users = query.offset(offset).limit(page_size).all()
         
-        # 转换为 schema 模型
+        # 转换为 schema 模型 SQLAlchemy 模型对象不能直接被 JSON 序列化 Pydantic 模型提供了自动的 JSON 序列化功能 Pydantic模型(UserListItem)只返回安全的字段
         user_list = [UserListItem.model_validate(user).model_dump(mode="json") for user in users]
             
         return user_list, total
