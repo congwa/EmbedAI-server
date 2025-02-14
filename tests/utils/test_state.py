@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
+import pytest
 
 class TestState:
     """测试状态管理器，用于保存测试进度和数据"""
@@ -12,7 +13,13 @@ class TestState:
         
     def _load_state(self) -> Dict[str, Any]:
         """加载测试状态"""
-        if not self.state_file.exists():
+        # 获取是否重置状态的参数
+        try:
+            reset_state = pytest.get_current_request().getfixturevalue("reset_state")
+        except Exception:
+            reset_state = False
+            
+        if reset_state or not self.state_file.exists():
             return {
                 "current_step": 0,
                 "data": {},
@@ -24,6 +31,16 @@ class TestState:
             
     def save(self):
         """保存测试状态"""
+        # 获取是否重置状态的参数
+        try:
+            reset_state = pytest.get_current_request().getfixturevalue("reset_state")
+        except Exception:
+            reset_state = False
+            
+        # 如果指定了重置状态，不保存状态文件
+        if reset_state:
+            return
+            
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(self.state, f, ensure_ascii=False, indent=2)
@@ -55,6 +72,10 @@ class TestState:
             "completed_steps": []
         }
         self.save()
+        
+        # 删除状态文件
+        if self.state_file.exists():
+            self.state_file.unlink()
 
     def get_step_data(self, key: str) -> Optional[Any]:
         """获取测试步骤数据"""

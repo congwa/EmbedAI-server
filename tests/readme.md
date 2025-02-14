@@ -12,6 +12,17 @@ rm -f tests/states/knowledge_base_flow.json
 pytest tests/test_knowledge_base_flow.py -v
 ```
 
+## 使用已 存状态
+
+```bash
+pytest tests/test_knowledge_base_flow.py::test_full_flow -v
+```
+
+## 重置状态
+
+```bash
+pytest tests/test_knowledge_base_flow.py::test_full_flow -v --reset-state
+
 2. 从断点继续运行：
 
 ```bash

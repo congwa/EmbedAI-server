@@ -22,12 +22,11 @@ def client():
 @pytest_asyncio.fixture(autouse=True)
 async def setup_database(state):
     """设置测试数据库"""
-    # 如果是新的测试运行，重置数据库和状态
-    if not state.step_completed("setup_database"):
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-        state.reset()
+    # 每次测试开始时都重置数据库和状态
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    state.reset()
     
     yield
     

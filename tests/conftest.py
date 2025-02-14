@@ -13,6 +13,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from main import app
 from app.models.database import AsyncSessionLocal, engine, Base
 
+def pytest_addoption(parser):
+    """添加命令行参数"""
+    parser.addoption(
+        "--reset-state",
+        action="store_true",
+        default=False,
+        help="重置测试状态，忽略已保存的状态文件"
+    )
+
+@pytest.fixture(scope="session")
+def reset_state(request):
+    """获取是否重置状态的参数值"""
+    return request.config.getoption("--reset-state")
+
 # 设置测试用的事件循环
 @pytest_asyncio.fixture(scope="session")
 def event_loop():
@@ -34,10 +48,10 @@ async def db() -> AsyncGenerator:
         yield session
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_database(state):
+async def setup_database(state, reset_state):
     """设置测试数据库"""
-    # 如果是新的测试运行，重置数据库和状态
-    if not state.step_completed("setup_database"):
+    # 如果指定了重置状态或者是新的测试运行，重置数据库和状态
+    if reset_state or not state.step_completed("setup_database"):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
