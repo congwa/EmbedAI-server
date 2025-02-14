@@ -30,112 +30,24 @@
   - 灵活的图模型设计，便于动态扩展知识结构
   - 强大的关系分析能力，支持知识推理和关联发现
 
-- 先进的AI问答处理流程
+- AI问答处理流程
   - 智能实体识别：区分命名实体和通用实体，通过向量编码实现精准匹配
   - 多层次评分机制：
     - 实体评分：基于向量相似度，对命名实体和通用实体采用差异化评分策略
     - 图结构评分：利用图结构信息重新评估实体重要性，考虑实体间关系强度
     - 关系评分：基于实体分数评估关系重要性，使用实体到关系的映射矩阵
     - 文本块评分：通过关系找到相关文本块，确保上下文完整性
-  - 层层递进的处理确保查询理解准确性和结果相关性
+  - 确保查询理解准确性和结果相关性
 
-- 企业级特性支持
-  - 完善的多租户隔离机制
-  - 细粒度的访问控制策略
-  - 支持文档的软删除机制，保护数据安全
-  - 基于FastAPI构建，提供高性能的异步处理能力
-  - 支持知识库训练队列管理，优化系统资源使用
+- 企业级特性
+  - 多租户隔离机制
+  - 访问控制策略
+  - 文档的软删除机制
+  - 知识库训练队列管理
 
 ## 数据库关系
 
 [![](https://mermaid.ink/img/pako:eNqNVMuumzAQ_RXL6yQKuYQEltVVN3dTqeqmimQ5eEJcwKa2aS4l-fcOIQ9eleKN7TmH8fjMMTWNtQAaUTDvkieG5ztFcPywYMj5PJ_rul1HZEdjA9yB3dEh50w-lD5lIBL4wi1cyfqkJpg1eddxmYNyUxn7WSY_0Mpx2Wbu5K7bdTMkMqUg3z6eIeuMVAmBnMtsFD1yewTBCm7tSRvxxPdaZ8AVkZZxkUs1jcRO_oFRUitSlkI1jgPe2PWhpuBWB8H2FcPav3ZqFxh3MocHhbsWvNwF6Iv2khKK59DnYbfADM--sYVG4TrX_2W1IvDJ8yID9rsEI7GDA1Q56SrmqmIEZVnOsIsHmYwOQv1TnJmQ5omBKnPiDFbQQNZxV9oJeboM09VpmnXA6dr3Lu1WxoMExmgzkQXvXE514uHUl5qACmVj5zQGxxSD-wsdX8V8wRc9sCzECOy4V0AGCPerTe9-Yns01NAT_3frhc5oDga9IvB_cpVgR90R0Gq0ebqCm7R5tg2Pl05_r1RMI2dKmFGjy-RIowPPLO7aqm__ozul4Oqn1t0tjWr6SaO5768X3nLle6HvvS3Dt3BGKxr5m-1itQ62AQLbYO1t_MuM_r1m8BZeEIThcu35_irYbvzV5R_K2pLI?type=png)](https://mermaid.live/edit#pako:eNqNVMuumzAQ_RXL6yQKuYQEltVVN3dTqeqmimQ5eEJcwKa2aS4l-fcOIQ9eleKN7TmH8fjMMTWNtQAaUTDvkieG5ztFcPywYMj5PJ_rul1HZEdjA9yB3dEh50w-lD5lIBL4wi1cyfqkJpg1eddxmYNyUxn7WSY_0Mpx2Wbu5K7bdTMkMqUg3z6eIeuMVAmBnMtsFD1yewTBCm7tSRvxxPdaZ8AVkZZxkUs1jcRO_oFRUitSlkI1jgPe2PWhpuBWB8H2FcPav3ZqFxh3MocHhbsWvNwF6Iv2khKK59DnYbfADM--sYVG4TrX_2W1IvDJ8yID9rsEI7GDA1Q56SrmqmIEZVnOsIsHmYwOQv1TnJmQ5omBKnPiDFbQQNZxV9oJeboM09VpmnXA6dr3Lu1WxoMExmgzkQXvXE514uHUl5qACmVj5zQGxxSD-wsdX8V8wRc9sCzECOy4V0AGCPerTe9-Yns01NAT_3frhc5oDga9IvB_cpVgR90R0Gq0ebqCm7R5tg2Pl05_r1RMI2dKmFGjy-RIowPPLO7aqm__ozul4Oqn1t0tjWr6SaO5768X3nLle6HvvS3Dt3BGKxr5m-1itQ62AQLbYO1t_MuM_r1m8BZeEIThcu35_irYbvzV5R_K2pLI)
-
-## API接口文档
-
-### 文档管理接口
-
-#### 创建文档
-
-- **接口**：POST /api/v1/admin/documents
-- **描述**：创建新的文档（仅管理员）
-- **参数**：
-  - knowledge_base_id：知识库ID
-  - title：文档标题
-  - content：文档内容
-  - doc_type：文档类型
-
-#### 获取文档列表
-
-- **接口**：GET /api/v1/admin/documents
-- **描述**：获取文档列表（仅管理员）
-- **参数**：
-  - knowledge_base_id：知识库ID
-  - skip：分页偏移量
-  - limit：每页数量
-  - title：文档标题（模糊搜索）
-  - doc_type：文档类型
-  - start_time：创建时间范围开始
-  - end_time：创建时间范围结束
-
-#### 更新文档
-
-- **接口**：PUT /api/v1/admin/documents/{doc_id}
-- **描述**：更新指定文档（仅管理员）
-- **参数**：
-  - title：文档标题
-  - content：文档内容
-  - doc_type：文档类型
-
-#### 删除文档
-
-- **接口**：DELETE /api/v1/admin/documents/{doc_id}
-- **描述**：软删除指定文档（仅管理员）
-
-### 知识库管理接口
-
-#### 创建知识库
-
-- **接口**：POST /api/v1/admin/knowledge-bases
-- **描述**：为指定用户创建知识库（仅管理员）
-- **参数**：
-  - name：知识库名称
-  - domain：领域描述
-  - example_queries：示例查询
-  - entity_types：实体类型
-  - llm_config：模型配置
-
-#### 训练知识库
-
-- **接口**：POST /api/v1/admin/knowledge-bases/{kb_id}/train
-- **描述**：启动知识库训练（仅管理员）
-
-#### 知识库查询
-
-- **接口**：POST /api/v1/knowledge-bases/{kb_id}/query
-- **描述**：执行知识库查询
-- **参数**：
-  - query：查询内容
-  - additional_context：附加上下文
-  - max_tokens：最大token数
-
-### 用户管理接口
-
-#### 创建用户
-
-- **接口**：POST /api/v1/admin/users
-- **描述**：创建新用户（仅管理员）
-- **参数**：
-  - email：用户邮箱
-  - password：用户密码
-  - is_admin：是否为管理员
-
-#### 更新用户信息
-
-- **接口**：PUT /api/v1/admin/users/{user_id}
-- **描述**：更新用户信息（仅管理员）
-- **参数**：
-  - email：用户邮箱
-  - password：用户密码
 
 ## TODOist
 

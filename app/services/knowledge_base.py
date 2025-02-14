@@ -1,15 +1,19 @@
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.knowledge_base import KnowledgeBase, TrainingStatus
+from sqlalchemy import and_, or_
+from fastapi import HTTPException, status
+from app.models.knowledge_base import KnowledgeBase, TrainingStatus, knowledge_base_users, PermissionType
 from app.models.document import Document
 from app.models.user import User
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
     QueryRequest,
-    QueryResponse
+    QueryResponse,
+    KnowledgeBasePermissionCreate,
+    KnowledgeBasePermissionUpdate
 )
 from app.utils.session import SessionManager
 from app.utils.rate_limit import rate_limit
@@ -20,68 +24,91 @@ class KnowledgeBaseService:
         self.db = db
         self.session_manager = SessionManager()
 
-    async def create(self, kb_in: KnowledgeBaseCreate, user_id: int) -> KnowledgeBase:
-        """创建新知识库
+    async def check_permission(
+        self,
+        kb_id: int,
+        user_id: int,
+        required_permission: PermissionType
+    ) -> bool:
+        """检查用户对知识库的权限"""
+        # 管理员用户拥有所有权限
+        user = await self.db.query(User).filter(User.id == user_id).first()
+        if user and user.is_admin:
+            return True
+            
+        # 查询用户权限
+        permission = await self.db.query(knowledge_base_users).filter(
+            and_(
+                knowledge_base_users.c.knowledge_base_id == kb_id,
+                knowledge_base_users.c.user_id == user_id
+            )
+        ).first()
+        
+        if not permission:
+            return False
+            
+        # 权限等级检查
+        permission_levels = {
+            PermissionType.VIEWER: 0,
+            PermissionType.EDITOR: 1,
+            PermissionType.ADMIN: 2,
+            PermissionType.OWNER: 3
+        }
+        
+        return permission_levels[permission.permission] >= permission_levels[required_permission]
 
-        Args:
-            kb_in (KnowledgeBaseCreate): 知识库创建模型
-            user_id (int): 要绑定的普通用户ID
+    async def get_user_permission(
+        self,
+        kb_id: int,
+        user_id: int
+    ) -> Optional[PermissionType]:
+        """获取用户对知识库的权限级别"""
+        permission = await self.db.query(knowledge_base_users).filter(
+            and_(
+                knowledge_base_users.c.knowledge_base_id == kb_id,
+                knowledge_base_users.c.user_id == user_id
+            )
+        ).first()
+        
+        return permission.permission if permission else None
 
-        Returns:
-            KnowledgeBase: 创建成功的知识库对象
-
-        Raises:
-            ValueError: 当用户不存在、已绑定知识库或无权限时抛出
-        """
-        # 检查用户是否存在且未绑定知识库
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise ValueError("User not found")
-
-        if user.is_admin:
-            raise ValueError("Cannot bind knowledge base to admin user")
-
-        # 检查用户是否已经绑定了知识库
-        if self.db.query(KnowledgeBase).filter(KnowledgeBase.owner_id == user_id).first():
-            raise ValueError("User already has a knowledge base")
-
-        # 验证管理员权限
-        admin_user = self.db.query(User).filter(User.id == user.created_by_id).first()
-        if not admin_user or not admin_user.is_admin:
-            raise ValueError("User was not created by an admin user")
-
-        # 创建工作目录
-        working_dir = f"kb_{user_id}"
-
-        # 创建知识库
-        kb = KnowledgeBase(
-            name=kb_in.name,
-            domain=kb_in.domain,
-            example_queries=kb_in.example_queries,
-            entity_types=kb_in.entity_types,
-            llm_config=kb_in.llm_config.model_dump(),
-            working_dir=working_dir,
-            owner_id=user_id
+    async def create(
+        self,
+        kb: KnowledgeBaseCreate,
+        owner_id: int
+    ) -> KnowledgeBase:
+        """创建知识库"""
+        db_kb = KnowledgeBase(
+            **kb.model_dump(),
+            owner_id=owner_id
         )
+        self.db.add(db_kb)
+        await self.db.flush()
+        
+        # 为创建者添加所有者权限
+        await self.db.execute(
+            knowledge_base_users.insert().values(
+                knowledge_base_id=db_kb.id,
+                user_id=owner_id,
+                permission=PermissionType.OWNER
+            )
+        )
+        
+        await self.db.commit()
+        return db_kb
 
-        self.db.add(kb)
-        self.db.commit()
-        self.db.refresh(kb)
-
-        return kb
-
-    async def train(self, kb_id: int) -> KnowledgeBase:
-        """训练知识库
-
-        Args:
-            kb_id (int): 知识库ID
-
-        Returns:
-            KnowledgeBase: 更新后的知识库对象
-
-        Raises:
-            ValueError: 当知识库不存在或不能训练时抛出
-        """
+    async def train(
+        self,
+        kb_id: int,
+        user_id: int
+    ) -> KnowledgeBase:
+        """训练知识库"""
+        if not await self.check_permission(kb_id, user_id, PermissionType.EDITOR):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
         kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
         if not kb:
             raise ValueError("Knowledge base not found")
@@ -161,34 +188,142 @@ class KnowledgeBaseService:
     async def get_by_id(self, kb_id: int) -> Optional[KnowledgeBase]:
         return self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
 
-    async def update(self, kb_id: int, kb_update: KnowledgeBaseUpdate, admin_id: int) -> KnowledgeBase:
-        """更新知识库信息
+    async def update(
+        self,
+        kb_id: int,
+        kb: KnowledgeBaseUpdate,
+        user_id: int
+    ) -> KnowledgeBase:
+        """更新知识库"""
+        if not await self.check_permission(kb_id, user_id, PermissionType.EDITOR):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
+        db_kb = await self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        if not db_kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
+            
+        for field, value in kb.model_dump(exclude_unset=True).items():
+            setattr(db_kb, field, value)
+            
+        await self.db.commit()
+        return db_kb
 
-        Args:
-            kb_id (int): 知识库ID
-            kb_update (KnowledgeBaseUpdate): 知识库更新模型
-            admin_id (int): 管理员用户ID
+    async def add_user(
+        self,
+        kb_id: int,
+        permission_data: KnowledgeBasePermissionCreate,
+        current_user_id: int
+    ) -> None:
+        """添加用户到知识库"""
+        if not await self.check_permission(kb_id, current_user_id, PermissionType.ADMIN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
+        # 检查用户是否已有权限
+        existing_permission = await self.get_user_permission(kb_id, permission_data.user_id)
+        if existing_permission:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户已经拥有此知识库的权限"
+            )
+            
+        await self.db.execute(
+            knowledge_base_users.insert().values(
+                knowledge_base_id=kb_id,
+                user_id=permission_data.user_id,
+                permission=permission_data.permission
+            )
+        )
+        await self.db.commit()
 
-        Returns:
-            KnowledgeBase: 更新后的知识库对象
+    async def update_user_permission(
+        self,
+        kb_id: int,
+        user_id: int,
+        permission_data: KnowledgeBasePermissionUpdate,
+        current_user_id: int
+    ) -> None:
+        """更新用户的知识库权限"""
+        if not await self.check_permission(kb_id, current_user_id, PermissionType.ADMIN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
+        # 不能修改所有者的权限
+        kb = await self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        if kb.owner_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能修改知识库所有者的权限"
+            )
+            
+        await self.db.execute(
+            knowledge_base_users.update()
+            .where(
+                and_(
+                    knowledge_base_users.c.knowledge_base_id == kb_id,
+                    knowledge_base_users.c.user_id == user_id
+                )
+            )
+            .values(permission=permission_data.permission)
+        )
+        await self.db.commit()
 
-        Raises:
-            ValueError: 当知识库不存在或管理员无权限时抛出
-        """
-        # 获取知识库
-        kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
-        if not kb:
-            raise ValueError("Knowledge base not found")
+    async def remove_user(
+        self,
+        kb_id: int,
+        user_id: int,
+        current_user_id: int
+    ) -> None:
+        """从知识库中移除用户"""
+        if not await self.check_permission(kb_id, current_user_id, PermissionType.ADMIN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
+        # 不能移除所有者
+        kb = await self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        if kb.owner_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能移除知识库所有者"
+            )
+            
+        await self.db.execute(
+            knowledge_base_users.delete().where(
+                and_(
+                    knowledge_base_users.c.knowledge_base_id == kb_id,
+                    knowledge_base_users.c.user_id == user_id
+                )
+            )
+        )
+        await self.db.commit()
 
-        # 验证管理员权限
-        if kb.owner.created_by_id != admin_id:
-            raise ValueError("Admin user does not have permission to update this knowledge base")
-
-        # 更新数据
-        update_data = kb_update.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(kb, field, value)
-
-        self.db.commit()
-        self.db.refresh(kb)
-        return kb
+    async def get_user_knowledge_bases(
+        self,
+        user_id: int
+    ) -> List[KnowledgeBase]:
+        """获取用户可访问的所有知识库"""
+        user = await self.db.query(User).filter(User.id == user_id).first()
+        
+        # 管理员可以看到所有知识库
+        if user.is_admin:
+            return await self.db.query(KnowledgeBase).all()
+            
+        # 普通用户只能看到自己有权限的知识库
+        return await self.db.query(KnowledgeBase).join(
+            knowledge_base_users,
+            KnowledgeBase.id == knowledge_base_users.c.knowledge_base_id
+        ).filter(
+            knowledge_base_users.c.user_id == user_id
+        ).all()

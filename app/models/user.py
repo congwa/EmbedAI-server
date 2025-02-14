@@ -18,4 +18,5 @@ class User(Base):
 
     # 关系定义
     created_by = relationship("User", remote_side=[id], backref="created_users")
-    knowledge_base = relationship("KnowledgeBase", back_populates="owner", uselist=False)
+    owned_knowledge_bases = relationship("KnowledgeBase", back_populates="owner", foreign_keys="KnowledgeBase.owner_id")
+    # accessible_knowledge_bases 通过 KnowledgeBase 中的 backref 自动创建

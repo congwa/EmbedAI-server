@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Any, List
 from pydantic import Field
 from .base import CustomBaseModel
+from datetime import datetime
+from app.models.knowledge_base import TrainingStatus, PermissionType
 
 class LLMConfig(CustomBaseModel):
     llm: Dict[str, Any]
@@ -11,21 +13,22 @@ class KnowledgeBaseBase(CustomBaseModel):
     name: str = Field(..., description="知识库名称")
     description: Optional[str] = Field(None, description="知识库描述")
 
-class KnowledgeBaseCreate(KnowledgeBaseBase):
+class KnowledgeBaseCreate(CustomBaseModel):
     """知识库创建模型"""
-    domain: str = Field("通用知识领域", description="知识库领域")
+    name: str
+    domain: str = "通用知识领域"
     example_queries: List[str] = []
     entity_types: List[str] = []
-    llm_config: LLMConfig
+    llm_config: Optional[Dict[str, Any]] = None
 
 class KnowledgeBaseUpdate(CustomBaseModel):
     """知识库更新模型"""
-    name: Optional[str] = Field(None, description="知识库名称")
-    description: Optional[str] = Field(None, description="知识库描述")
-    domain: Optional[str] = Field(None, description="知识库领域")
+    name: Optional[str] = None
+    description: Optional[str] = None
+    domain: Optional[str] = None
     example_queries: Optional[List[str]] = None
     entity_types: Optional[List[str]] = None
-    llm_config: Optional[LLMConfig] = None
+    llm_config: Optional[Dict[str, Any]] = None
 
 class KnowledgeBaseInDB(KnowledgeBaseBase):
     """数据库中的知识库模型"""
@@ -37,6 +40,11 @@ class KnowledgeBaseInDB(KnowledgeBaseBase):
     entity_types: List[str]
     llm_config: LLMConfig
     working_dir: str
+    training_status: TrainingStatus
+    training_started_at: Optional[datetime]
+    training_finished_at: Optional[datetime]
+    training_error: Optional[str]
+    queued_at: Optional[datetime]
 
 class KnowledgeBaseResponse(KnowledgeBaseInDB):
     """知识库响应模型"""
@@ -55,3 +63,37 @@ class QueryResponse(CustomBaseModel):
     """查询响应模型"""
     response: str
     context: Optional[Dict[str, Any]] = None
+
+class KnowledgeBasePermissionCreate(CustomBaseModel):
+    user_id: int
+    permission: PermissionType = PermissionType.VIEWER
+
+class KnowledgeBasePermissionUpdate(CustomBaseModel):
+    permission: PermissionType
+
+class KnowledgeBasePermission(CustomBaseModel):
+    user_id: int
+    knowledge_base_id: int
+    permission: PermissionType
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class KnowledgeBase(CustomBaseModel):
+    id: int
+    name: str
+    owner_id: int
+    domain: str
+    example_queries: List[str]
+    entity_types: List[str]
+    llm_config: Optional[Dict[str, Any]]
+    working_dir: Optional[str]
+    training_status: TrainingStatus
+    training_started_at: Optional[datetime]
+    training_finished_at: Optional[datetime]
+    training_error: Optional[str]
+    queued_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True

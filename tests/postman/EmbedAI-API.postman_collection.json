@@ -151,141 +151,6 @@
           ]
         },
         {
-          "name": "创建知识库",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/knowledge-bases?user_id=1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "knowledge-bases"],
-              "query": [
-                {
-                  "key": "user_id",
-                  "value": "1"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"测试知识库\",\n    \"description\": \"这是一个测试知识库\"\n}"
-            }
-          }
-        },
-        {
-          "name": "更新知识库",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/knowledge-bases/1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "knowledge-bases", "1"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"更新后的知识库名称\",\n    \"description\": \"更新后的描述\"\n}"
-            }
-          }
-        },
-        {
-          "name": "训练知识库",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/knowledge-bases/1/train",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "knowledge-bases", "1", "train"]
-            }
-          }
-        },
-        {
-          "name": "创建文档",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/documents?knowledge_base_id=1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "documents"],
-              "query": [
-                {
-                  "key": "knowledge_base_id",
-                  "value": "1"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"title\": \"测试文档\",\n    \"content\": \"这是测试文档的内容\"\n}"
-            }
-          }
-        },
-        {
-          "name": "获取文档列表",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/documents?knowledge_base_id=1&skip=0&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "documents"],
-              "query": [
-                {
-                  "key": "knowledge_base_id",
-                  "value": "1"
-                },
-                {
-                  "key": "skip",
-                  "value": "0"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                }
-              ]
-            }
-          }
-        },
-        {
           "name": "管理员修改用户密码",
           "request": {
             "method": "PUT",
@@ -354,6 +219,228 @@
       ]
     },
     {
+      "name": "知识库管理",
+      "item": [
+        {
+          "name": "创建知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"测试知识库\",\n    \"domain\": \"通用知识领域\",\n    \"example_queries\": [\"示例问题1\", \"示例问题2\"],\n    \"entity_types\": [\"人物\", \"组织\"],\n    \"llm_config\": {\n        \"model\": \"gpt-3.5-turbo\",\n        \"temperature\": 0.7\n    }\n}"
+            },
+            "description": "创建新的知识库，创建者自动获得所有者权限"
+          }
+        },
+        {
+          "name": "更新知识库",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"更新后的知识库名称\",\n    \"domain\": \"更新后的领域\",\n    \"example_queries\": [\"新示例1\", \"新示例2\"]\n}"
+            },
+            "description": "更新知识库信息，需要 EDITOR 及以上权限"
+          }
+        },
+        {
+          "name": "训练知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/train",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "train"]
+            },
+            "description": "启动知识库训练，需要 EDITOR 及以上权限"
+          }
+        },
+        {
+          "name": "添加用户到知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "users"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": 2,\n    \"permission\": \"editor\"\n}"
+            },
+            "description": "添加用户到知识库并设置权限，需要 ADMIN 及以上权限"
+          }
+        },
+        {
+          "name": "更新用户权限",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/users/2",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "users", "2"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"permission\": \"admin\"\n}"
+            },
+            "description": "更新用户的知识库权限，需要 ADMIN 及以上权限"
+          }
+        },
+        {
+          "name": "移除用户",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/users/2",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "users", "2"]
+            },
+            "description": "从知识库中移除用户，需要 ADMIN 及以上权限"
+          }
+        },
+        {
+          "name": "获取我的知识库列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/my",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "my"]
+            },
+            "description": "获取当前用户可访问的所有知识库列表"
+          }
+        }
+      ]
+    },
+    {
+      "name": "文档管理",
+      "item": [
+        {
+          "name": "创建文档",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "documents"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"测试文档\",\n    \"content\": \"这是测试文档的内容\",\n    \"doc_type\": \"text\"\n}"
+            },
+            "description": "创建新文档，需要 EDITOR 及以上权限"
+          }
+        },
+        {
+          "name": "获取文档列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-bases/1/documents?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "knowledge-bases", "1", "documents"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "获取知识库的文档列表，需要 VIEWER 及以上权限"
+          }
+        }
+      ]
+    },
+    {
       "name": "客户端接口",
       "item": [
         {
@@ -390,7 +477,8 @@
             "body": {
               "mode": "raw",
               "raw": "{\n    \"query\": \"这是一个测试查询\",\n    \"top_k\": 5\n}"
-            }
+            },
+            "description": "查询知识库，需要 VIEWER 及以上权限"
           }
         }
       ]
