@@ -2,13 +2,14 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import verify_password, verify_signature
 from app.models.database import get_db
 from app.models.user import User
 from app.schemas.auth import TokenData
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 配置OAuth2密码Bearer认证方案，指定token获取的URL端点
 oauth2_scheme = OAuth2PasswordBearer(
@@ -16,38 +17,40 @@ oauth2_scheme = OAuth2PasswordBearer(
     auto_error=True  # 当请求没有token时自动返回401错误
 )
 
-async def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
     """用户认证函数
 
     验证用户提供的邮箱和密码是否匹配数据库中的记录
 
     Args:
-        db (Session): 数据库会话
+        db (AsyncSession): 数据库会话
         email (str): 用户邮箱
         password (str): 用户密码
 
     Returns:
         Optional[User]: 如果认证成功返回用户对象，否则返回None
     """
-    user = db.query(User).filter(User.email == email).first()
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user
 
 async def get_current_user(
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
 ) -> User:
-    """获取当前认证用户
+    """获取当前用户
 
-    从请求中获取JWT token并验证，返回对应的用户对象
+    从token中解析用户信息并验证用户是否存在
 
     Args:
-        db (Session): 数据库会话
-        token (str): JWT token字符串
+        token (str): JWT token
+        db (AsyncSession): 数据库会话
 
     Returns:
-        User: 当前认证用户对象
+        User: 当前用户对象
 
     Raises:
         HTTPException: 当token无效或用户不存在时抛出401认证错误
@@ -58,29 +61,17 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        print("Received token:", token)  # 打印收到的 token
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            print("Decoded payload:", payload)  # 打印解码后的 payload
-        except Exception as e:
-            print(f"Token decode error: {str(e)}")  # 打印具体的解码错误
-            print(f"Error type: {type(e)}")  # 打印错误类型
-            print(f"Error details: {e.__dict__}")  # 打印错误详情
-            raise credentials_exception
-            
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         email: str = payload.get("sub")
-        print("Email from token:", email)  # 打印获取的邮箱
         if email is None:
-            print("Email is None in payload")  # 打印邮箱为空的情况
             raise credentials_exception
         token_data = TokenData(email=email)
-    except JWTError as e:
-        print(f"JWT Error occurred: {str(e)}")  # 打印JWT错误信息
-        print(f"JWT Error type: {type(e)}")  # 打印JWT错误类型
-        print(f"JWT Error details: {e.__dict__}")  # 打印JWT错误详情
+    except JWTError:
         raise credentials_exception
-        
-    user = db.query(User).filter(User.email == token_data.email).first()
+
+    stmt = select(User).where(User.email == token_data.email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
     return user
@@ -137,7 +128,7 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
         return False, None, "Invalid timestamp format"
 
     # 获取数据库会话并查找用户
-    db: Session = next(get_db())
+    db: AsyncSession = next(get_db())
     user = db.query(User).filter(User.sdk_key == headers['sdk_key']).first()
 
     if not user or not user.secret_key:

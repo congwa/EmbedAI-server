@@ -11,15 +11,15 @@ router = APIRouter(tags=["admin"])
 
 @router.post("/login")
 async def login(
-    form_data: OAuth2EmailPasswordRequestForm,
+    request_data: OAuth2EmailPasswordRequestForm,
     db: Session = Depends(get_db)
 ):
-    """管理员登录接口
+    """用户登录接口
 
-    验证管理员的邮箱和密码，如果验证成功则生成并返回访问令牌
+    验证用户的邮箱和密码，如果验证成功则生成并返回访问令牌
 
     Args:
-        form_data (OAuth2EmailPasswordRequestForm): 包含邮箱和密码的表单数据
+        request_data (OAuth2EmailPasswordRequestForm): 包含邮箱和密码的JSON数据
         db (Session): 数据库会话对象
 
     Returns:
@@ -28,8 +28,8 @@ async def login(
     Raises:
         HTTPException: 当邮箱或密码错误时抛出401认证错误
     """
-    user = await authenticate_user(db, form_data.email, form_data.password)
-    if not user or not user.is_admin:
+    user = await authenticate_user(db, request_data.email, request_data.password)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

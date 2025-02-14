@@ -5,6 +5,8 @@ from sqlalchemy import desc
 from app.models.document import Document, DocumentType
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPagination, DocumentResponse
 from app.core.exceptions import NotFoundError
+from sqlalchemy.sql import select, func
+from app.models.knowledge_base import KnowledgeBase, TrainingStatus
 
 class DocumentService:
     """文档服务类
@@ -30,14 +32,32 @@ class DocumentService:
         Returns:
             Document: 创建成功的文档对象
         """
+        # 获取知识库
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == knowledge_base_id)
+        )).scalar_one_or_none()
+        if not kb:
+            raise ValueError("Knowledge base not found")
+
+        # 创建文档
         doc = Document(
-            **doc_in.model_dump(),
+            title=doc_in.title,
+            content=doc_in.content,
+            doc_type=doc_in.doc_type,
             knowledge_base_id=knowledge_base_id,
             created_by_id=created_by_id
         )
         self.db.add(doc)
-        self.db.commit()
-        self.db.refresh(doc)
+        
+        # 更新知识库状态为 INIT
+        kb.training_status = TrainingStatus.INIT
+        kb.training_started_at = None
+        kb.training_finished_at = None
+        kb.training_error = None
+        kb.queued_at = None
+        
+        await self.db.commit()
+        await self.db.refresh(doc)
         return doc
 
     async def get(self, doc_id: int) -> Optional[Document]:
@@ -49,10 +69,12 @@ class DocumentService:
         Returns:
             Optional[Document]: 文档对象，如果不存在则返回None
         """
-        return self.db.query(Document).filter(
-            Document.id == doc_id,
-            Document.is_deleted == False
-        ).first()
+        return (await self.db.execute(
+            select(Document).filter(
+                Document.id == doc_id,
+                Document.is_deleted == False
+            )
+        )).scalar_one_or_none()
 
     async def get_multi(
         self,
@@ -78,7 +100,7 @@ class DocumentService:
         Returns:
             DocumentPagination: 分页的文档列表
         """
-        query = self.db.query(Document).filter(
+        query = select(Document).filter(
             Document.knowledge_base_id == knowledge_base_id,
             Document.is_deleted == False
         )
@@ -93,14 +115,19 @@ class DocumentService:
         if end_time:
             query = query.filter(Document.created_at <= end_time)
 
-        total = query.count()
-        items = query.order_by(desc(Document.created_at)).offset(skip).limit(limit).all()
+        total = (await self.db.execute(
+            select(func.count()).select_from(query.subquery())
+        )).scalar()
+
+        items = (await self.db.execute(
+            query.order_by(desc(Document.created_at)).offset(skip).limit(limit)
+        )).scalars().all()
 
         return DocumentPagination(
             total=total,
             page=skip // limit + 1,
             page_size=limit,
-            items=[DocumentResponse.from_orm(item) for item in items]
+            items=[DocumentResponse.model_validate(item) for item in items]
         )
 
     async def update(self, doc_id: int, doc_in: DocumentUpdate) -> Document:
@@ -114,24 +141,21 @@ class DocumentService:
             Document: 更新后的文档对象
 
         Raises:
-            NotFoundError: 当文档不存在时抛出
+            NotFoundError: 文档不存在时抛出此异常
         """
         doc = await self.get(doc_id)
         if not doc:
             raise NotFoundError("Document not found")
 
-        update_data = doc_in.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
+        for field, value in doc_in.model_dump(exclude_unset=True).items():
             setattr(doc, field, value)
 
-        self.db.commit()
-        self.db.refresh(doc)
+        await self.db.commit()
+        await self.db.refresh(doc)
         return doc
 
     async def delete(self, doc_id: int) -> Document:
         """软删除文档
-
-        将文档标记为已删除状态，而不是真正从数据库中删除
 
         Args:
             doc_id (int): 文档ID
@@ -140,13 +164,13 @@ class DocumentService:
             Document: 被删除的文档对象
 
         Raises:
-            NotFoundError: 当文档不存在时抛出
+            NotFoundError: 文档不存在时抛出此异常
         """
         doc = await self.get(doc_id)
         if not doc:
             raise NotFoundError("Document not found")
 
         doc.is_deleted = True
-        self.db.commit()
-        self.db.refresh(doc)
+        await self.db.commit()
+        await self.db.refresh(doc)
         return doc

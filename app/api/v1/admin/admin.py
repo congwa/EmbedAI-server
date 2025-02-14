@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.core.response import APIResponse
@@ -16,7 +17,7 @@ router = APIRouter(tags=["admin"])
 @router.post("/register")
 async def register_admin(
     admin_data: AdminRegister,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """管理员注册接口
 
@@ -24,7 +25,7 @@ async def register_admin(
 
     Args:
         admin_data (AdminRegister): 包含邮箱、密码和注册码的数据
-        db (Session): 数据库会话对象
+        db (AsyncSession): 数据库会话对象
 
     Returns:
         APIResponse: 包含注册成功信息的响应对象
@@ -41,7 +42,9 @@ async def register_admin(
             )
 
         # 检查邮箱是否已存在
-        if db.query(User).filter(User.email == admin_data.email).first():
+        stmt = select(User).where(User.email == admin_data.email)
+        result = await db.execute(stmt)
+        if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -56,10 +59,10 @@ async def register_admin(
         
         try:
             db.add(user)
-            db.commit()
-            db.refresh(user)
+            await db.commit()
+            await db.refresh(user)
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Database error: {str(e)}"
@@ -85,7 +88,7 @@ async def register_admin(
 @router.post("/users", dependencies=[Depends(get_current_admin_user)])
 async def create_user(
     user_data: UserCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
     """创建普通用户
@@ -95,7 +98,7 @@ async def create_user(
 
     Args:
         user_data (UserCreate): 用户创建模型，包含email和password信息
-        db (Session): 数据库会话对象
+        db (AsyncSession): 数据库会话对象
         current_user: 当前登录的管理员用户
 
     Returns:
@@ -111,7 +114,7 @@ async def create_user(
 async def list_users(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
     """获取用户列表
@@ -121,7 +124,7 @@ async def list_users(
     Args:
         page (int): 页码，从1开始
         page_size (int): 每页显示的数量，1-100之间
-        db (Session): 数据库会话对象
+        db (AsyncSession): 数据库会话对象
         current_user: 当前登录的管理员用户
 
     Returns:
@@ -136,14 +139,14 @@ async def list_users(
         page=page,
         page_size=page_size,
         message="获取用户列表成功"
-    )  
+    )
 
 @router.put("/users/{user_id}/password", dependencies=[Depends(get_current_admin_user)])
 async def admin_change_user_password(
     user_id: int,
     password_in: AdminChangeUserPasswordRequest,
     current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """管理员修改普通用户密码
     

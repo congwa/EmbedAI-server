@@ -1,10 +1,10 @@
 from typing import Optional, List, Tuple
 import secrets
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserListItem
-from sqlalchemy import select
 from sqlalchemy.sql import func
 from app.core.exceptions import ValidationError
 
@@ -13,11 +13,11 @@ class UserService:
 
     处理用户相关的业务逻辑，包括用户的创建、查询和更新等操作
     """
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """初始化用户服务
 
         Args:
-            db (Session): 数据库会话对象
+            db (AsyncSession): 数据库会话对象
         """
         self.db = db
 
@@ -48,7 +48,9 @@ class UserService:
             ValidationError: 当邮箱已存在时抛出验证错误
         """
         # 检查邮箱是否已存在
-        if self.db.query(User).filter(User.email == user_in.email).first():
+        stmt = select(User).where(User.email == user_in.email)
+        result = await self.db.execute(stmt)
+        if result.scalar_one_or_none():
             raise ValidationError(f"Email {user_in.email} is already registered")
             
         sdk_key = None
@@ -65,8 +67,8 @@ class UserService:
             secret_key=secret_key
         )
         self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
+        await self.db.commit()
+        await self.db.refresh(user)
         return user
 
     async def get_by_email(self, email: str) -> Optional[User]:
@@ -78,7 +80,9 @@ class UserService:
         Returns:
             Optional[User]: 如果用户存在则返回用户对象，否则返回None
         """
-        return self.db.query(User).filter(User.email == email).first()
+        stmt = select(User).where(User.email == email)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def update(self, user_id: int, user_in: UserUpdate) -> Optional[User]:
         """更新用户信息
@@ -92,7 +96,7 @@ class UserService:
         Returns:
             Optional[User]: 更新成功返回更新后的用户对象，如果用户不存在返回None
         """
-        user = self.db.query(User).filter(User.id == user_id).first()
+        user = await self.db.get(User, user_id)
         if not user:
             return None
             
@@ -103,8 +107,8 @@ class UserService:
         for field, value in update_data.items():
             setattr(user, field, value)
             
-        self.db.commit()
-        self.db.refresh(user)
+        await self.db.commit()
+        await self.db.refresh(user)
         return user
 
     async def get_users(self, page: int, page_size: int, admin_id: int) -> Tuple[List[UserListItem], int]:
@@ -119,19 +123,22 @@ class UserService:
             Tuple[List[UserListItem], int]: 返回用户列表和总数
         """
         # 构建查询条件：非管理员用户 且 由指定管理员创建
-        query = self.db.query(User).filter(
+        stmt = select(User).where(
             User.is_admin == False,
             User.created_by_id == admin_id
         )
         
         # 计算总数
-        total = query.count()
+        count_stmt = select(func.count()).select_from(stmt)
+        total = await self.db.scalar(count_stmt)
         
         # 获取分页数据
         offset = (page - 1) * page_size
-        users = query.offset(offset).limit(page_size).all()
+        stmt = stmt.offset(offset).limit(page_size)
+        result = await self.db.execute(stmt)
+        users = result.scalars().all()
         
-        # 转换为 schema 模型 SQLAlchemy 模型对象不能直接被 JSON 序列化 Pydantic 模型提供了自动的 JSON 序列化功能 Pydantic模型(UserListItem)只返回安全的字段
+        # 转换为 schema 模型
         user_list = [UserListItem.model_validate(user).model_dump(mode="json") for user in users]
             
         return user_list, total
@@ -149,11 +156,13 @@ class UserService:
         Raises:
             ValidationError: 当用户不存在时抛出验证错误
         """
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        user = result.scalar_one_or_none()
         if not user:
             raise ValidationError("User not found")
             
         # 更新新密码
         user.hashed_password = get_password_hash(new_password)
-        self.db.commit()
+        await self.db.commit()
         return True

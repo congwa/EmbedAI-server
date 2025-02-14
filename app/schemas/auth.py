@@ -2,9 +2,17 @@ from pydantic import EmailStr
 from .base import CustomBaseModel
 
 class OAuth2EmailPasswordRequestForm(CustomBaseModel):
-    """OAuth2 邮箱密码请求表单"""
+    """管理员登录请求模型"""
     email: EmailStr
     password: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "admin@example.com",
+                "password": "admin123"
+            }
+        }
 
 class TokenData(CustomBaseModel):
     """Token数据模型"""

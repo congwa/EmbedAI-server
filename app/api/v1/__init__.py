@@ -1,5 +1,6 @@
+"""API v1包"""
 from fastapi import APIRouter
-from .admin import auth, admin, document
+from .admin import auth, admin, document, knowledge_base
 from .client import client
 
 api_router = APIRouter()
@@ -8,6 +9,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(document.router, prefix="/admin", tags=["admin"])
+api_router.include_router(knowledge_base.router, prefix="/admin", tags=["admin"])
 
 # 注册客户端路由
 api_router.include_router(client.router, prefix="/client", tags=["client"])

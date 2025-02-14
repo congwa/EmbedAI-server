@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, List
-from pydantic import Field
+from pydantic import Field, BaseModel
 from .base import CustomBaseModel
 from datetime import datetime
 from app.models.knowledge_base import TrainingStatus, PermissionType
@@ -13,18 +13,17 @@ class KnowledgeBaseBase(CustomBaseModel):
     name: str = Field(..., description="知识库名称")
     description: Optional[str] = Field(None, description="知识库描述")
 
-class KnowledgeBaseCreate(CustomBaseModel):
-    """知识库创建模型"""
+class KnowledgeBaseCreate(BaseModel):
+    """创建知识库请求"""
     name: str
-    domain: str = "通用知识领域"
-    example_queries: List[str] = []
-    entity_types: List[str] = []
+    domain: str
+    example_queries: Optional[List[str]] = None
+    entity_types: Optional[List[str]] = None
     llm_config: Optional[Dict[str, Any]] = None
 
-class KnowledgeBaseUpdate(CustomBaseModel):
-    """知识库更新模型"""
+class KnowledgeBaseUpdate(BaseModel):
+    """更新知识库请求"""
     name: Optional[str] = None
-    description: Optional[str] = None
     domain: Optional[str] = None
     example_queries: Optional[List[str]] = None
     entity_types: Optional[List[str]] = None
@@ -46,23 +45,35 @@ class KnowledgeBaseInDB(KnowledgeBaseBase):
     training_error: Optional[str]
     queued_at: Optional[datetime]
 
-class KnowledgeBaseResponse(KnowledgeBaseInDB):
-    """知识库响应模型"""
-    pass
+class KnowledgeBaseResponse(BaseModel):
+    """知识库响应"""
+    id: int
+    name: str
+    domain: str
+    owner_id: int
+    example_queries: Optional[List[str]] = None
+    entity_types: Optional[List[str]] = None
+    llm_config: Optional[Dict[str, Any]] = None
+    working_dir: Optional[str] = None
+    training_status: TrainingStatus
+    training_started_at: Optional[datetime] = None
+    training_finished_at: Optional[datetime] = None
+    training_error: Optional[str] = None
+    queued_at: Optional[datetime] = None
 
-class QueryRequest(CustomBaseModel):
-    """查询请求模型"""
-    query: str = Field(..., description="查询内容")
-    with_references: bool = Field(True, description="是否返回参考资料")
-    only_context: bool = Field(False, description="是否只返回上下文")
-    entities_max_tokens: int = Field(4000, description="实体最大token数")
-    relationships_max_tokens: int = Field(3000, description="关系最大token数")
-    chunks_max_tokens: int = Field(9000, description="块最大token数")
+    class Config:
+        from_attributes = True
 
-class QueryResponse(CustomBaseModel):
-    """查询响应模型"""
-    response: str
-    context: Optional[Dict[str, Any]] = None
+class QueryRequest(BaseModel):
+    """查询请求"""
+    query: str
+    top_k: int = 5
+
+class QueryResponse(BaseModel):
+    """查询响应"""
+    query: str
+    results: List[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]] = None
 
 class KnowledgeBasePermissionCreate(CustomBaseModel):
     user_id: int
