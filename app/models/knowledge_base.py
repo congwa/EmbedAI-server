@@ -17,14 +17,7 @@ class PermissionType(PyEnum):
 
     @classmethod
     def get_permission_level(cls, permission: 'PermissionType') -> int:
-        """获取权限等级
-        
-        Args:
-            permission: 权限类型
-            
-        Returns:
-            int: 权限等级，数字越大权限越高
-        """
+        """获取权限等级"""
         permission_levels = {
             cls.VIEWER: 0,
             cls.EDITOR: 1,
@@ -35,16 +28,45 @@ class PermissionType(PyEnum):
 
     @classmethod
     def check_permission_level(cls, current: 'PermissionType', required: 'PermissionType') -> bool:
-        """检查权限等级是否满足要求
+        """检查权限等级是否满足要求"""
+        return cls.get_permission_level(current) >= cls.get_permission_level(required)
+
+    @classmethod
+    def get_allowed_operations(cls, permission: 'PermissionType') -> set:
+        """获取权限允许的操作
         
         Args:
-            current: 当前权限
-            required: 所需权限
+            permission: 权限类型
             
         Returns:
-            bool: 是否满足权限要求
+            set: 允许的操作集合
         """
-        return cls.get_permission_level(current) >= cls.get_permission_level(required)
+        # 基础操作集合
+        viewer_ops = {'view_kb', 'query_kb', 'view_members'}
+        editor_ops = {*viewer_ops, 'add_document', 'edit_document', 'delete_document', 'train_kb'}
+        admin_ops = {*editor_ops, 'add_member', 'update_member', 'remove_member', 'update_kb'}
+        owner_ops = {*admin_ops, 'delete_kb', 'transfer_ownership'}
+        
+        permission_ops = {
+            cls.VIEWER: viewer_ops,
+            cls.EDITOR: editor_ops,
+            cls.ADMIN: admin_ops,
+            cls.OWNER: owner_ops
+        }
+        return permission_ops[permission]
+
+    @classmethod
+    def can_perform_operation(cls, permission: 'PermissionType', operation: str) -> bool:
+        """检查权限是否可以执行特定操作
+        
+        Args:
+            permission: 权限类型
+            operation: 操作名称
+            
+        Returns:
+            bool: 是否允许执行操作
+        """
+        return operation in cls.get_allowed_operations(permission)
 
 class TrainingStatus(PyEnum):
     INIT = "init"
@@ -140,17 +162,17 @@ class KnowledgeBase(Base):
         self,
         kb_id: int,
         user_id: int,
-        required_permission: PermissionType
+        operation: str
     ) -> bool:
-        """检查用户对知识库的权限
+        """检查用户是否有权限执行特定操作
         
         Args:
             kb_id: 知识库ID
             user_id: 用户ID
-            required_permission: 所需权限级别
+            operation: 操作名称
             
         Returns:
-            bool: 是否具有权限
+            bool: 是否有权限执行操作
         """
         # 获取用户信息
         user = (await self.db.execute(
@@ -176,13 +198,13 @@ class KnowledgeBase(Base):
         
         # 如果用户是系统管理员且没有明确的知识库权限，赋予 VIEWER 权限
         if user.is_admin and not permission:
-            return PermissionType.check_permission_level(PermissionType.VIEWER, required_permission)
+            return PermissionType.can_perform_operation(PermissionType.VIEWER, operation)
             
         # 如果没有权限记录且不是管理员，则无权限
         if not permission:
             return False
             
-        return PermissionType.check_permission_level(permission.permission, required_permission)
+        return PermissionType.can_perform_operation(permission.permission, operation)
         
     async def get_all_members(self) -> List[Dict[str, Any]]:
         """获取所有成员信息
@@ -233,13 +255,13 @@ class KnowledgeBase(Base):
             raise ValueError("用户已是知识库成员")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(self.id, current_user_id, "add_member"):
             raise ValueError("没有足够的权限执行此操作")
             
-        # 获取当前用户权限
-        current_permission = await self.get_member_permission(current_user_id)
-        if not current_permission:  # 如果是系统管理员，使用 VIEWER 权限
-            current_permission = PermissionType.VIEWER
+        # 获取当前用户有效权限
+        current_permission = await self.get_effective_permission(current_user_id)
+        if not current_permission:
+            raise ValueError("没有足够的权限执行此操作")
             
         # 不能添加权限级别高于或等于自己的成员
         if PermissionType.get_permission_level(permission) >= PermissionType.get_permission_level(current_permission):
@@ -284,13 +306,13 @@ class KnowledgeBase(Base):
             raise ValueError("不能修改知识库所有者的权限")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(self.id, current_user_id, "update_member"):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息
-        current_permission = await self.get_member_permission(current_user_id)
-        if not current_permission:  # 如果是系统管理员，使用 VIEWER 权限
-            current_permission = PermissionType.VIEWER
+        current_permission = await self.get_effective_permission(current_user_id)
+        if not current_permission:
+            raise ValueError("没有足够的权限执行此操作")
             
         target_permission = await self.get_member_permission(user_id)
         if not target_permission:
@@ -335,13 +357,13 @@ class KnowledgeBase(Base):
             raise ValueError("不能移除知识库所有者")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(self.id, current_user_id, "remove_member"):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息
-        current_permission = await self.get_member_permission(current_user_id)
-        if not current_permission:  # 如果是系统管理员，使用 VIEWER 权限
-            current_permission = PermissionType.VIEWER
+        current_permission = await self.get_effective_permission(current_user_id)
+        if not current_permission:
+            raise ValueError("没有足够的权限执行此操作")
             
         target_permission = await self.get_member_permission(user_id)
         if not target_permission:
@@ -360,3 +382,44 @@ class KnowledgeBase(Base):
             )
         )
         await self.db.commit()
+
+    async def get_effective_permission(self, user_id: int) -> Optional[PermissionType]:
+        """获取用户的有效权限
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            Optional[PermissionType]: 用户的有效权限，如果没有权限则返回None
+        """
+        # 获取用户信息
+        user = (await self.db.execute(
+            select(User).filter(User.id == user_id)
+        )).scalar_one_or_none()
+        
+        if not user:
+            return None
+            
+        # 如果是所有者，返回所有者权限
+        if user_id == self.owner_id:
+            return PermissionType.OWNER
+            
+        # 查询用户权限
+        permission = (await self.db.execute(
+            select(knowledge_base_users).filter(
+                and_(
+                    knowledge_base_users.c.knowledge_base_id == self.id,
+                    knowledge_base_users.c.user_id == user_id
+                )
+            )
+        )).first()
+        
+        # 如果有明确的权限记录，返回该权限
+        if permission:
+            return permission.permission
+            
+        # 如果是系统管理员但没有明确权限，返回 VIEWER 权限
+        if user.is_admin:
+            return PermissionType.VIEWER
+            
+        return None
