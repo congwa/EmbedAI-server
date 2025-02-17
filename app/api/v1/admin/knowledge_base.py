@@ -6,7 +6,9 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
     KnowledgeBasePermissionCreate,
-    KnowledgeBasePermissionUpdate
+    KnowledgeBasePermissionUpdate,
+    KnowledgeBaseMemberCreate,
+    KnowledgeBaseMemberUpdate
 )
 from app.services.knowledge_base import KnowledgeBaseService
 from app.core.response import APIResponse
@@ -149,18 +151,18 @@ async def list_my_knowledge_bases(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取当前用户可访问的所有知识库
+    """获取当前用户可访问的所有知识库，包含成员信息
 
     Args:
         current_user: 当前登录用户
         db (AsyncSession): 数据库会话对象
 
     Returns:
-        APIResponse: 包含知识库列表的响应对象
+        APIResponse: 包含知识库列表的响应对象，每个知识库包含成员信息
     """
     kb_service = KnowledgeBaseService(db)
     result = await kb_service.get_user_knowledge_bases(current_user.id)
-    return APIResponse.success(data=[kb.to_dict() for kb in result])
+    return APIResponse.success(data=result)
 
 @router.get("/{kb_id}")
 async def get_knowledge_base(
@@ -202,4 +204,112 @@ async def query_knowledge_base(
     """
     kb_service = KnowledgeBaseService(db)
     result = await kb_service.query(kb_id, query_request, current_user.id)
-    return APIResponse.success(data=result) 
+    return APIResponse.success(data=result)
+
+@router.get("/{kb_id}/users")
+async def list_knowledge_base_users(
+    kb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取知识库成员列表
+
+    Args:
+        kb_id (int): 知识库ID
+        current_user: 当前登录用户
+        db (AsyncSession): 数据库会话对象
+
+    Returns:
+        APIResponse: 包含成员列表的响应对象
+    """
+    kb_service = KnowledgeBaseService(db)
+    result = await kb_service.get_knowledge_base_users(kb_id, current_user.id)
+    return APIResponse.success(data=result)
+
+@router.get("/{kb_id}/members")
+async def get_knowledge_base_members(
+    kb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取知识库成员列表
+    
+    Args:
+        kb_id: 知识库ID
+        current_user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        APIResponse: 包含成员列表的响应
+    """
+    kb_service = KnowledgeBaseService(db)
+    result = await kb_service.get_knowledge_base_members(kb_id, current_user.id)
+    return APIResponse.success(data=result)
+
+@router.post("/{kb_id}/members")
+async def add_knowledge_base_member(
+    kb_id: int,
+    member_data: KnowledgeBaseMemberCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """添加知识库成员
+    
+    Args:
+        kb_id: 知识库ID
+        member_data: 成员信息
+        current_user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        APIResponse: 成功响应
+    """
+    kb_service = KnowledgeBaseService(db)
+    await kb_service.add_knowledge_base_member(kb_id, member_data, current_user.id)
+    return APIResponse.success(message="成员添加成功")
+
+@router.put("/{kb_id}/members/{user_id}")
+async def update_knowledge_base_member(
+    kb_id: int,
+    user_id: int,
+    member_data: KnowledgeBaseMemberUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新知识库成员权限
+    
+    Args:
+        kb_id: 知识库ID
+        user_id: 目标用户ID
+        member_data: 更新的权限信息
+        current_user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        APIResponse: 成功响应
+    """
+    kb_service = KnowledgeBaseService(db)
+    await kb_service.update_knowledge_base_member(kb_id, user_id, member_data, current_user.id)
+    return APIResponse.success(message="成员权限更新成功")
+
+@router.delete("/{kb_id}/members/{user_id}")
+async def remove_knowledge_base_member(
+    kb_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """移除知识库成员
+    
+    Args:
+        kb_id: 知识库ID
+        user_id: 要移除的用户ID
+        current_user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        APIResponse: 成功响应
+    """
+    kb_service = KnowledgeBaseService(db)
+    await kb_service.remove_knowledge_base_member(kb_id, user_id, current_user.id)
+    return APIResponse.success(message="成员移除成功") 

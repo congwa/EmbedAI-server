@@ -17,7 +17,7 @@ depends_on = None
 
 def upgrade():
     # 添加created_at和updated_at字段
-    now = datetime.now().isoformat()
+    now = datetime.now()
     op.add_column('knowledge_bases', sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text(f"'{now}'")))
     op.add_column('knowledge_bases', sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text(f"'{now}'")))
 

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -13,7 +13,11 @@ from app.schemas.knowledge_base import (
     QueryRequest,
     QueryResponse,
     KnowledgeBasePermissionCreate,
-    KnowledgeBasePermissionUpdate
+    KnowledgeBasePermissionUpdate,
+    KnowledgeBaseMemberList,
+    KnowledgeBaseMemberInfo,
+    KnowledgeBaseMemberCreate,
+    KnowledgeBaseMemberUpdate
 )
 from app.utils.session import SessionManager
 from app.utils.rate_limit import rate_limit
@@ -242,7 +246,7 @@ class KnowledgeBaseService:
             user_id (int): 用户ID
 
         Returns:
-            KnowledgeBase: 知识库对象
+            KnowledgeBase: 知识库对象，包含成员信息
 
         Raises:
             HTTPException: 当用户没有权限或知识库不存在时抛出
@@ -262,6 +266,30 @@ class KnowledgeBaseService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="知识库不存在"
             )
+            
+        # 获取知识库成员
+        members = await self.db.execute(
+            select(User, knowledge_base_users.c.permission)
+            .join(
+                knowledge_base_users,
+                User.id == knowledge_base_users.c.user_id
+            )
+            .filter(knowledge_base_users.c.knowledge_base_id == kb_id)
+        )
+        
+        # 构建成员列表
+        member_list = []
+        for member, permission in members:
+            member_list.append({
+                "id": member.id,
+                "email": member.email,
+                "permission": permission,
+                "is_owner": member.id == kb.owner_id,
+                "is_admin": member.is_admin
+            })
+            
+        # 将成员列表添加到知识库对象中
+        kb.members = member_list
             
         return kb
 
@@ -399,22 +427,217 @@ class KnowledgeBaseService:
     async def get_user_knowledge_bases(
         self,
         user_id: int
-    ) -> List[KnowledgeBase]:
-        """获取用户可访问的所有知识库"""
+    ) -> List[Dict[str, Any]]:
+        """获取用户可访问的所有知识库，并包含成员信息
+
+        Args:
+            user_id (int): 用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 知识库列表，每个知识库包含成员信息
+        """
         user = (await self.db.execute(
             select(User).filter(User.id == user_id)
         )).scalar_one_or_none()
         
-        # 管理员可以看到所有知识库
+        # 获取知识库列表
         if user.is_admin:
-            return (await self.db.execute(select(KnowledgeBase))).scalars().all()
-            
-        # 普通用户只能看到自己有权限的知识库
-        return (await self.db.execute(
-            select(KnowledgeBase).join(
-                knowledge_base_users,
-                KnowledgeBase.id == knowledge_base_users.c.knowledge_base_id
-            ).filter(
-                knowledge_base_users.c.user_id == user_id
+            knowledge_bases = (await self.db.execute(select(KnowledgeBase))).scalars().all()
+        else:
+            knowledge_bases = (await self.db.execute(
+                select(KnowledgeBase).join(
+                    knowledge_base_users,
+                    KnowledgeBase.id == knowledge_base_users.c.knowledge_base_id
+                ).filter(
+                    knowledge_base_users.c.user_id == user_id
+                )
+            )).scalars().all()
+        
+        # 为每个知识库获取成员信息
+        result = []
+        for kb in knowledge_bases:
+            # 获取知识库成员
+            members = await self.db.execute(
+                select(User, knowledge_base_users.c.permission)
+                .join(
+                    knowledge_base_users,
+                    User.id == knowledge_base_users.c.user_id
+                )
+                .filter(knowledge_base_users.c.knowledge_base_id == kb.id)
             )
-        )).scalars().all()
+            
+            # 构建成员列表
+            member_list = []
+            for member, permission in members:
+                member_list.append({
+                    "id": member.id,
+                    "email": member.email,
+                    "permission": permission,
+                    "is_owner": member.id == kb.owner_id
+                })
+            
+            # 构建知识库信息
+            kb_dict = kb.to_dict()
+            kb_dict["members"] = member_list
+            result.append(kb_dict)
+        
+        return result
+
+    async def get_knowledge_base_users(
+        self,
+        kb_id: int,
+        current_user_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取知识库的所有成员
+
+        Args:
+            kb_id (int): 知识库ID
+            current_user_id (int): 当前用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 成员列表，包含用户信息和权限信息
+
+        Raises:
+            HTTPException: 当用户没有权限时抛出
+        """
+        if not await self.check_permission(kb_id, current_user_id, PermissionType.VIEWER):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+        
+        # 获取知识库所有成员
+        result = await self.db.execute(
+            select(User, knowledge_base_users.c.permission)
+            .join(
+                knowledge_base_users,
+                User.id == knowledge_base_users.c.user_id
+            )
+            .filter(knowledge_base_users.c.knowledge_base_id == kb_id)
+        )
+        
+        users = []
+        for user, permission in result:
+            users.append({
+                "id": user.id,
+                "email": user.email,
+                "permission": permission,
+                "is_owner": user.id == (await self.get(kb_id, current_user_id)).owner_id
+            })
+        
+        return users
+
+    async def get_knowledge_base_members(
+        self,
+        kb_id: int,
+        current_user_id: int
+    ) -> KnowledgeBaseMemberList:
+        """获取知识库成员列表
+        
+        Args:
+            kb_id: 知识库ID
+            current_user_id: 当前用户ID
+            
+        Returns:
+            KnowledgeBaseMemberList: 成员列表响应
+            
+        Raises:
+            HTTPException: 当用户没有权限或知识库不存在时
+        """
+        kb = await self.get(kb_id)
+        if not await kb.check_permission(current_user_id, PermissionType.VIEWER):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="没有足够的权限执行此操作"
+            )
+            
+        members = await kb.get_all_members()
+        return KnowledgeBaseMemberList(
+            members=[KnowledgeBaseMemberInfo(**m) for m in members],
+            total=len(members)
+        )
+        
+    async def add_knowledge_base_member(
+        self,
+        kb_id: int,
+        member_data: KnowledgeBaseMemberCreate,
+        current_user_id: int
+    ) -> None:
+        """添加知识库成员
+        
+        Args:
+            kb_id: 知识库ID
+            member_data: 成员信息
+            current_user_id: 当前用户ID
+            
+        Raises:
+            HTTPException: 当用户没有权限、知识库不存在或操作失败时
+        """
+        kb = await self.get(kb_id)
+        try:
+            await kb.add_member(
+                member_data.user_id,
+                member_data.permission,
+                current_user_id
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+            
+    async def update_knowledge_base_member(
+        self,
+        kb_id: int,
+        user_id: int,
+        member_data: KnowledgeBaseMemberUpdate,
+        current_user_id: int
+    ) -> None:
+        """更新知识库成员权限
+        
+        Args:
+            kb_id: 知识库ID
+            user_id: 目标用户ID
+            member_data: 更新的权限信息
+            current_user_id: 当前用户ID
+            
+        Raises:
+            HTTPException: 当用户没有权限、知识库不存在或操作失败时
+        """
+        kb = await self.get(kb_id)
+        try:
+            await kb.update_member_permission(
+                user_id,
+                member_data.permission,
+                current_user_id
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+            
+    async def remove_knowledge_base_member(
+        self,
+        kb_id: int,
+        user_id: int,
+        current_user_id: int
+    ) -> None:
+        """移除知识库成员
+        
+        Args:
+            kb_id: 知识库ID
+            user_id: 要移除的用户ID
+            current_user_id: 当前用户ID
+            
+        Raises:
+            HTTPException: 当用户没有权限、知识库不存在或操作失败时
+        """
+        kb = await self.get(kb_id)
+        try:
+            await kb.remove_member(user_id, current_user_id)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )

@@ -109,6 +109,62 @@ class KnowledgeBase(CustomBaseModel):
     training_finished_at: Optional[datetime]
     training_error: Optional[str]
     queued_at: Optional[datetime]
+    members: Optional[List[Dict[str, Any]]] = None
 
     class Config:
         from_attributes = True
+
+class KnowledgeBaseMemberInfo(CustomBaseModel):
+    """知识库成员信息"""
+    id: int
+    email: str
+    permission: PermissionType
+    is_owner: bool
+    is_admin: bool
+    created_at: Optional[datetime] = None
+
+class KnowledgeBaseMemberCreate(CustomBaseModel):
+    """添加知识库成员请求"""
+    user_id: int
+    permission: PermissionType = PermissionType.VIEWER
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": 1,
+                "permission": "viewer"
+            }
+        }
+
+class KnowledgeBaseMemberUpdate(CustomBaseModel):
+    """更新知识库成员权限请求"""
+    permission: PermissionType
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "permission": "editor"
+            }
+        }
+
+class KnowledgeBaseMemberList(CustomBaseModel):
+    """知识库成员列表响应"""
+    members: List[KnowledgeBaseMemberInfo]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "members": [
+                    {
+                        "id": 1,
+                        "email": "user@example.com",
+                        "permission": "viewer",
+                        "is_owner": False,
+                        "is_admin": False,
+                        "created_at": "2024-02-17T10:00:00"
+                    }
+                ],
+                "total": 1
+            }
+        }
