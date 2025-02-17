@@ -41,6 +41,10 @@ class KnowledgeBase(Base):
     llm_config = Column(JSON, nullable=False)
     working_dir = Column(String, nullable=True)
     
+    # 时间字段
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+    
     # 训练相关字段
     training_status = Column(Enum(TrainingStatus), nullable=False, default=TrainingStatus.INIT)
     training_started_at = Column(DateTime, nullable=True)
@@ -74,6 +78,8 @@ class KnowledgeBase(Base):
             'entity_types': self.entity_types,
             'llm_config': self.llm_config,
             'working_dir': self.working_dir,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'training_status': self.training_status.value,
             'training_started_at': self.training_started_at.isoformat() if self.training_started_at else None,
             'training_finished_at': self.training_finished_at.isoformat() if self.training_finished_at else None,

@@ -55,6 +55,8 @@ class KnowledgeBaseResponse(BaseModel):
     entity_types: Optional[List[str]] = None
     llm_config: Optional[Dict[str, Any]] = None
     working_dir: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     training_status: TrainingStatus
     training_started_at: Optional[datetime] = None
     training_finished_at: Optional[datetime] = None
@@ -100,6 +102,8 @@ class KnowledgeBase(CustomBaseModel):
     entity_types: List[str]
     llm_config: Optional[Dict[str, Any]]
     working_dir: Optional[str]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
     training_status: TrainingStatus
     training_started_at: Optional[datetime]
     training_finished_at: Optional[datetime]

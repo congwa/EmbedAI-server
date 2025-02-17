@@ -3,3 +3,5 @@ __pycache__
 *.log
 
 tests/states/*.json
+
+migrations/versions/*.py
