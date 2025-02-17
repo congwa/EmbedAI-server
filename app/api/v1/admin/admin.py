@@ -209,4 +209,37 @@ async def update_user_status(
             )
         return APIResponse.error(code=404, message="User not found")
     except Exception as e:
+        return APIResponse.error(code=400, message=str(e))
+
+@router.post("/users/{user_id}/reset-keys", dependencies=[Depends(get_current_admin_user)])
+async def reset_user_keys(
+    user_id: int,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重置用户的SDK密钥和密钥对
+
+    管理员可以通过此接口重置用户的SDK密钥和密钥对。
+
+    Args:
+        user_id (int): 要重置密钥的用户ID
+        current_user (User): 当前管理员用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        APIResponse: 重置结果
+        
+    Raises:
+        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+    """
+    user_service = UserService(db)
+    try:
+        user = await user_service.reset_user_keys(user_id)
+        if user:
+            return APIResponse.success(
+                message="User keys reset successfully",
+                data=UserResponse.model_validate(user)
+            )
+        return APIResponse.error(code=404, message="User not found")
+    except Exception as e:
         return APIResponse.error(code=400, message=str(e)) 

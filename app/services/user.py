@@ -191,3 +191,31 @@ class UserService:
         await self.db.commit()
         await self.db.refresh(user)
         return user
+
+    async def reset_user_keys(self, user_id: int) -> Optional[User]:
+        """重置用户的SDK密钥和密钥对
+
+        Args:
+            user_id (int): 用户ID
+
+        Returns:
+            Optional[User]: 更新成功返回更新后的用户对象，如果用户不存在返回None
+            
+        Raises:
+            ValidationError: 当用户不存在时抛出验证错误
+        """
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ValidationError("User not found")
+            
+        # 生成新的密钥对
+        sdk_key, secret_key = self._generate_api_keys()
+        user.sdk_key = sdk_key
+        user.secret_key = secret_key
+        
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
