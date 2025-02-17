@@ -13,6 +13,8 @@ from app.schemas.knowledge_base import (
 from app.services.knowledge_base import KnowledgeBaseService
 from app.core.response import APIResponse
 from app.models.user import User
+from app.core.decorators import require_knowledge_base_permission
+from app.models.enums import PermissionType
 
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-base"])
 
@@ -37,6 +39,7 @@ async def create_knowledge_base(
     return APIResponse.success(data=result.to_dict())
 
 @router.put("/{kb_id}")
+@require_knowledge_base_permission(PermissionType.ADMIN)
 async def update_knowledge_base(
     kb_id: int,
     kb: KnowledgeBaseUpdate,
@@ -59,6 +62,7 @@ async def update_knowledge_base(
     return APIResponse.success(data=result.to_dict())
 
 @router.post("/{kb_id}/train")
+@require_knowledge_base_permission(PermissionType.EDITOR)
 async def train_knowledge_base(
     kb_id: int,
     current_user: User = Depends(get_current_user),
@@ -165,6 +169,7 @@ async def list_my_knowledge_bases(
     return APIResponse.success(data=result)
 
 @router.get("/{kb_id}")
+@require_knowledge_base_permission(PermissionType.VIEWER)
 async def get_knowledge_base(
     kb_id: int,
     current_user: User = Depends(get_current_user),
@@ -185,6 +190,7 @@ async def get_knowledge_base(
     return APIResponse.success(data=result.to_dict())
 
 @router.post("/{kb_id}/query")
+@require_knowledge_base_permission(PermissionType.VIEWER)
 async def query_knowledge_base(
     kb_id: int,
     query_request: dict,
@@ -206,8 +212,9 @@ async def query_knowledge_base(
     result = await kb_service.query(kb_id, query_request, current_user.id)
     return APIResponse.success(data=result)
 
-@router.get("/{kb_id}/users")
-async def list_knowledge_base_users(
+@router.get("/{kb_id}/members")
+@require_knowledge_base_permission(PermissionType.VIEWER)
+async def list_knowledge_base_members(
     kb_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -223,30 +230,11 @@ async def list_knowledge_base_users(
         APIResponse: 包含成员列表的响应对象
     """
     kb_service = KnowledgeBaseService(db)
-    result = await kb_service.get_knowledge_base_users(kb_id, current_user.id)
-    return APIResponse.success(data=result)
-
-@router.get("/{kb_id}/members")
-async def get_knowledge_base_members(
-    kb_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """获取知识库成员列表
-    
-    Args:
-        kb_id: 知识库ID
-        current_user: 当前用户
-        db: 数据库会话
-        
-    Returns:
-        APIResponse: 包含成员列表的响应
-    """
-    kb_service = KnowledgeBaseService(db)
     result = await kb_service.get_knowledge_base_members(kb_id, current_user.id)
     return APIResponse.success(data=result)
 
 @router.post("/{kb_id}/members")
+@require_knowledge_base_permission(PermissionType.ADMIN)
 async def add_knowledge_base_member(
     kb_id: int,
     member_data: KnowledgeBaseMemberCreate,
@@ -269,6 +257,7 @@ async def add_knowledge_base_member(
     return APIResponse.success(message="成员添加成功")
 
 @router.put("/{kb_id}/members/{user_id}")
+@require_knowledge_base_permission(PermissionType.ADMIN)
 async def update_knowledge_base_member(
     kb_id: int,
     user_id: int,
@@ -293,6 +282,7 @@ async def update_knowledge_base_member(
     return APIResponse.success(message="成员权限更新成功")
 
 @router.delete("/{kb_id}/members/{user_id}")
+@require_knowledge_base_permission(PermissionType.ADMIN)
 async def remove_knowledge_base_member(
     kb_id: int,
     user_id: int,

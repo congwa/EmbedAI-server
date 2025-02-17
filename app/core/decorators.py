@@ -1,9 +1,11 @@
 import time
 from functools import wraps
 from typing import Optional
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, status
 from app.services.auth import verify_sdk_auth
 from app.core.response import APIResponse
+from app.models.enums import PermissionType
+from app.services.knowledge_base import KnowledgeBaseService
 
 def require_sdk_auth():
     """SDK认证装饰器
@@ -87,3 +89,42 @@ def admin_required(func):
         return await func(*args, **kwargs)
     
     return wrapper
+
+def require_knowledge_base_permission(required_permission: PermissionType):
+    """知识库权限检查装饰器
+    
+    Args:
+        required_permission: 所需的权限级别
+        
+    Returns:
+        装饰器函数
+        
+    Raises:
+        HTTPException: 当用户没有足够权限时抛出 403 错误
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # 从参数中获取必要的信息
+            kb_id = kwargs.get('kb_id')
+            current_user = kwargs.get('current_user')
+            db = kwargs.get('db')
+            
+            if not all([kb_id, current_user, db]):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="缺少必要的参数"
+                )
+                
+            # 检查权限
+            kb_service = KnowledgeBaseService(db)
+            kb = await kb_service.get(kb_id)
+            if not await kb.check_permission(kb_id, current_user.id, required_permission):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="没有足够的权限执行此操作"
+                )
+                
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator

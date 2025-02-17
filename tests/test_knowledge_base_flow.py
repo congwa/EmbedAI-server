@@ -116,94 +116,6 @@ async def step_create_knowledge_base(state: TestState, client: TestClient):
     assert response.status_code == 200
     state.save_step_data("kb_id", response.json()["data"]["id"])
 
-@step_decorator("add_user_to_kb")
-async def step_add_user_to_kb(state: TestState, client: TestClient):
-    """添加用户到知识库"""
-    admin_token = state.get_step_data("admin_token")
-    kb_id = state.get_step_data("kb_id")
-    admin_id = state.get_step_data("admin_id")
-    response = client.post(
-        f"/api/v1/admin/knowledge-bases/{kb_id}/users",
-        json={
-            "user_id": admin_id,
-            "permission": "viewer"
-        },
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200
-
-@step_decorator("create_document")
-async def step_create_document(state: TestState, client: TestClient):
-    """创建文档"""
-    user_token = state.get_step_data("user_token")
-    kb_id = state.get_step_data("kb_id")
-    response = client.post(
-        f"/api/v1/admin/knowledge-bases/{kb_id}/documents",
-        json={
-            "title": "测试文档",
-            "content": "这是一个测试文档的内容",
-            "doc_type": "text"
-        },
-        headers={"Authorization": f"Bearer {user_token}"}
-    )
-    assert response.status_code == 200
-    state.save_step_data("doc_id", response.json()["data"]["id"])
-
-@step_decorator("train_knowledge_base")
-async def step_train_knowledge_base(state: TestState, client: TestClient):
-    """训练知识库"""
-    user_token = state.get_step_data("user_token")
-    kb_id = state.get_step_data("kb_id")
-    response = client.post(
-        f"/api/v1/admin/knowledge-bases/{kb_id}/train",
-        headers={"Authorization": f"Bearer {user_token}"}
-    )
-    assert response.status_code == 200
-
-@step_decorator("query_knowledge_base")
-async def step_query_knowledge_base(state: TestState, client: TestClient):
-    """查询知识库"""
-    user_token = state.get_step_data("user_token")
-    kb_id = state.get_step_data("kb_id")
-    
-    # 等待知识库训练完成
-    max_retries = 10
-    for _ in range(max_retries):
-        response = client.get(
-            f"/api/v1/admin/knowledge-bases/{kb_id}",
-            headers={"Authorization": f"Bearer {user_token}"}
-        )
-        assert response.status_code == 200
-        if response.json()["data"]["training_status"] == "TRAINED":
-            break
-        await asyncio.sleep(1)
-    
-    response = client.post(
-        f"/api/v1/admin/knowledge-bases/{kb_id}/query",
-        json={
-            "query": "测试问题",
-            "top_k": 3
-        },
-        headers={"Authorization": f"Bearer {user_token}"}
-    )
-    assert response.status_code == 200
-
-@step_decorator("list_kb_users")
-async def step_list_kb_users(state: TestState, client: TestClient):
-    """获取知识库成员列表"""
-    user_token = state.get_step_data("user_token")
-    kb_id = state.get_step_data("kb_id")
-    response = client.get(
-        f"/api/v1/admin/knowledge-bases/{kb_id}/users",
-        headers={"Authorization": f"Bearer {user_token}"}
-    )
-    assert response.status_code == 200
-    users = response.json()["data"]
-    # 验证返回的用户列表
-    assert len(users) > 0
-    assert "permission" in users[0]
-    assert "is_owner" in users[0]
-
 @step_decorator("create_another_user")
 async def step_create_another_user(state: TestState, client: TestClient):
     """创建另一个普通用户"""
@@ -358,6 +270,23 @@ async def step_remove_member(state: TestState, client: TestClient):
     )
     assert response.status_code == 403
 
+@step_decorator("create_document")
+async def step_create_document(state: TestState, client: TestClient):
+    """创建文档"""
+    user_token = state.get_step_data("user_token")
+    kb_id = state.get_step_data("kb_id")
+    response = client.post(
+        f"/api/v1/admin/knowledge-bases/{kb_id}/documents",
+        json={
+            "title": "测试文档",
+            "content": "这是一个测试文档的内容",
+            "doc_type": "text"
+        },
+        headers={"Authorization": f"Bearer {user_token}"}
+    )
+    assert response.status_code == 200
+    state.save_step_data("doc_id", response.json()["data"]["id"])
+
 @pytest.mark.asyncio
 async def test_full_flow(state: TestState, client: TestClient):
     """完整的测试流程"""
@@ -373,6 +302,4 @@ async def test_full_flow(state: TestState, client: TestClient):
     await step_update_member_permission(state, client)
     await step_test_member_access(state, client)
     await step_remove_member(state, client)
-    await step_create_document(state, client)
-    # await step_train_knowledge_base(state, client)
-    # await step_query_knowledge_base(state, client) 
+    await step_create_document(state, client) 
