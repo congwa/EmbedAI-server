@@ -62,4 +62,4 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 3. 修改 uvicorn.run 的调用方式
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, workers=1)
