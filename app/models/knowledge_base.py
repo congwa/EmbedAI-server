@@ -1,96 +1,19 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON, ARRAY, DateTime, Enum, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, JSON, ARRAY, DateTime, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
-from enum import Enum as PyEnum
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.schemas.base import CustomBaseModel
 from sqlalchemy.sql import select, and_
-from app.models.user import User
-
-class PermissionType(PyEnum):
-    """权限类型"""
-    OWNER = "owner"      # 所有者权限 完全控制权限
-    ADMIN = "admin"      # 管理员权限 管理权限，可以管理其他用户的访问权限
-    EDITOR = "editor"    # 编辑权限 编辑权限，可以添加/修改文档
-    VIEWER = "viewer"    # 查看权限  查看权限，只能查看和使用
-
-    @classmethod
-    def get_permission_level(cls, permission: 'PermissionType') -> int:
-        """获取权限等级"""
-        permission_levels = {
-            cls.VIEWER: 0,
-            cls.EDITOR: 1,
-            cls.ADMIN: 2,
-            cls.OWNER: 3
-        }
-        return permission_levels[permission]
-
-    @classmethod
-    def check_permission_level(cls, current: 'PermissionType', required: 'PermissionType') -> bool:
-        """检查权限等级是否满足要求"""
-        return cls.get_permission_level(current) >= cls.get_permission_level(required)
-
-    @classmethod
-    def get_allowed_operations(cls, permission: 'PermissionType') -> set:
-        """获取权限允许的操作
-        
-        Args:
-            permission: 权限类型
-            
-        Returns:
-            set: 允许的操作集合
-        """
-        # 基础操作集合
-        viewer_ops = {'view_kb', 'query_kb', 'view_members'}
-        editor_ops = {*viewer_ops, 'add_document', 'edit_document', 'delete_document', 'train_kb'}
-        admin_ops = {*editor_ops, 'add_member', 'update_member', 'remove_member', 'update_kb'}
-        owner_ops = {*admin_ops, 'delete_kb', 'transfer_ownership'}
-        
-        permission_ops = {
-            cls.VIEWER: viewer_ops,
-            cls.EDITOR: editor_ops,
-            cls.ADMIN: admin_ops,
-            cls.OWNER: owner_ops
-        }
-        return permission_ops[permission]
-
-    @classmethod
-    def can_perform_operation(cls, permission: 'PermissionType', operation: str) -> bool:
-        """检查权限是否可以执行特定操作
-        
-        Args:
-            permission: 权限类型
-            operation: 操作名称
-            
-        Returns:
-            bool: 是否允许执行操作
-        """
-        return operation in cls.get_allowed_operations(permission)
-
-class TrainingStatus(PyEnum):
-    INIT = "init"
-    QUEUED = "queued"
-    TRAINING = "training"
-    TRAINED = "trained"
-    FAILED = "failed"
-
-# 知识库用户权限关联表
-knowledge_base_users = Table(
-    "knowledge_base_users",
-    Base.metadata,
-    Column("knowledge_base_id", Integer, ForeignKey("knowledge_bases.id"), primary_key=True),
-    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
-    Column("permission", Enum(PermissionType), nullable=False),
-    Column("created_at", DateTime, nullable=False, default=datetime.now)
-)
+from .associations import knowledge_base_users
+from .enums import PermissionType, TrainingStatus
 
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     domain = Column(String, nullable=False)
     example_queries = Column(JSON, nullable=False)
     entity_types = Column(JSON, nullable=False)
@@ -110,10 +33,14 @@ class KnowledgeBase(Base):
     
     # 关系定义
     owner = relationship("User", back_populates="owned_knowledge_bases", foreign_keys=[owner_id])
-    documents = relationship("Document", back_populates="knowledge_base")
-    users = relationship("User", 
-                        secondary=knowledge_base_users,
-                        back_populates="knowledge_bases")
+    documents = relationship("Document", back_populates="knowledge_base", cascade="all, delete-orphan")
+    users = relationship(
+        "User", 
+        secondary=knowledge_base_users,
+        back_populates="knowledge_bases",
+        cascade="all, delete",
+        passive_deletes=True
+    )
     
     @property
     def can_train(self) -> bool:
