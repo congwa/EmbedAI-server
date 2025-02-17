@@ -1,112 +1,112 @@
 # EmbedAI 测试说明
 
+## 测试环境准备
+
+1. 确保已安装所需依赖：
+```bash
+pip install pytest pytest-asyncio
+```
+
+2. 确保配置文件正确：
+   - 数据库配置
+   - 环境变量配置
+   - 确保 `ACCESS_TOKEN_EXPIRE_MINUTES` 设置足够长（建议测试时设置为 60）
+
 ## 运行测试
 
-1. 首次运行完整测试：
+### 1. 完整测试运行
 
 ```bash
-# 清理环境（可选）
+# 方式一：清理环境并运行
 rm -f tests/states/knowledge_base_flow.json
-
-# 运行测试
 pytest tests/test_knowledge_base_flow.py -v
+
+# 方式二：使用重置参数运行
+pytest tests/test_knowledge_base_flow.py -v --reset-state
 ```
 
-## 使用已 存状态
-
-```bash
-pytest tests/test_knowledge_base_flow.py::test_full_flow -v
-```
-
-## 重置状态
-
-```bash
-pytest tests/test_knowledge_base_flow.py::test_full_flow -v --reset-state
-
-2. 从断点继续运行：
+### 2. 断点续测
 
 ```bash
 # 直接运行，会从上次中断的地方继续
 pytest tests/test_knowledge_base_flow.py -v
 ```
 
-3. 重置测试状态：
+### 3. 测试状态管理
 
 ```bash
+# 查看测试状态
+python -c "import json; print(json.load(open('tests/states/knowledge_base_flow.json')))"
+
+# 重置测试状态（三种方式）
 # 方式1：删除状态文件
 rm -f tests/states/knowledge_base_flow.json
 
 # 方式2：使用 Python API
 python -c "from tests.utils.test_state import TestState; TestState('knowledge_base_flow').reset()"
+
+# 方式3：使用命令行参数
+pytest tests/test_knowledge_base_flow.py -v --reset-state
+
+# 运行单个测试用例
+pytest tests/test_knowledge_base_flow.py::test_create_admin -v
 ```
 
-4. 查看测试状态：
+### 4. 调试说明
 
-```bash
-python -c "import json; print(json.load(open('tests/states/knowledge_base_flow.json')))"
-```
+1. **认证问题排查**：
+   - 检查 token 是否正确保存：`print(state.get_step_data("user_token"))`
+   - 验证 token 格式：确保包含 "Bearer "
+   - 检查 token 有效期：建议测试时设置较长的有效期
+
+2. **API路径问题**：
+   - 管理员接口：`/api/v1/admin/...`
+   - 普通接口：`/api/v1/...`
+   - 认证接口：`/api/v1/auth/...`
+
+3. **常见问题解决**：
+   - 401错误：检查token是否正确、是否过期
+   - 403错误：检查用户权限
+   - 404错误：检查API路径是否正确
 
 ## 测试流程说明
 
-1. 基础流程：
+### 1. 基础测试流程
+
+测试用例按以下顺序执行：
+
+1. 管理员相关：
    - 创建管理员账户
-   - 管理员登录
+   - 管理员登录认证
+   - 获取管理员信息
+
+2. 用户管理：
    - 创建普通用户
    - 普通用户登录
+   - 用户信息验证
+
+3. 知识库操作：
    - 创建知识库
+   - 配置知识库权限
    - 添加用户到知识库
-   - 创建文档
-   - 训练知识库
-   - 查询知识库
+   - 上传和管理文档
+   - 知识库训练
+   - 知识库查询测试
 
-2. 状态保存：
-   - 测试状态保存在 `tests/states/` 目录
-   - 每个测试用例的状态独立保存
-   - 支持断点续测
+### 2. 状态管理机制
 
-3. 注意事项：
-   - 首次运行会重置数据库
-   - 确保数据库配置正确
-   - 确保环境变量配置正确
+- **状态保存位置**：
+  - 测试状态文件保存在 `tests/states/` 目录
+  - 每个测试流程独立的状态文件
+  - 文件格式：JSON
 
-```py
+- **状态内容**：
+  - 当前执行步骤
+  - 测试数据（用户ID、知识库ID等）
+  - 已完成的测试步骤
 
-# 首次运行完整测试
-pytest tests/test_knowledge_base_flow.py -v
+- **断点续测机制**：
+  - 自动记录测试进度
+  - 支持从断点处继续执行
+  - 可以随时重置状态
 
-# 从断点继续运行
-pytest tests/test_knowledge_base_flow.py -v
-
-
-
-# 首次运行完整测试
-pytest tests/test_knowledge_base_flow.py -v
-
-# 从断点继续运行
-pytest tests/test_knowledge_base_flow.py -v
-
-
-# 清理环境
-rm -f tests/states/knowledge_base_flow.json
-
-# 运行测试
-pytest tests/test_knowledge_base_flow.py -v
-
-
-# 直接运行，会从上次中断的地方继续
-pytest tests/test_knowledge_base_flow.py -v
-
-# 删除状态文件
-rm -f tests/states/knowledge_base_flow.json
-
-# 或者使用 Python
-from tests.utils.test_state import TestState
-state = TestState("knowledge_base_flow")
-state.reset()
-
-
-import json
-with open("tests/states/knowledge_base_flow.json") as f:
-    print(json.load(f))
-
-```

@@ -4,6 +4,7 @@ from .database import Base
 from enum import Enum as PyEnum
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from app.schemas.base import CustomBaseModel
 
 class PermissionType(PyEnum):
     """权限类型"""
@@ -68,23 +69,15 @@ class KnowledgeBase(Base):
         return self.training_status == TrainingStatus.TRAINED
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典，用于 JSON 序列化"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'owner_id': self.owner_id,
-            'domain': self.domain,
-            'example_queries': self.example_queries,
-            'entity_types': self.entity_types,
-            'llm_config': self.llm_config,
-            'working_dir': self.working_dir,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'training_status': self.training_status.value,
-            'training_started_at': self.training_started_at.isoformat() if self.training_started_at else None,
-            'training_finished_at': self.training_finished_at.isoformat() if self.training_finished_at else None,
-            'training_error': self.training_error,
-            'queued_at': self.queued_at.isoformat() if self.queued_at else None,
-            'can_train': self.can_train,
-            'can_query': self.can_query
-        }
+        """转换为字典，用于 JSON 序列化
+        
+        使用 Pydantic 的序列化方式处理时间字段，确保时间格式的一致性
+        
+        Returns:
+            Dict[str, Any]: 包含所有字段的字典，时间字段会被格式化为 ISO 格式字符串
+        """
+        from app.schemas.knowledge_base import KnowledgeBase as KnowledgeBaseSchema
+        
+        # 使用 Pydantic 模型进行序列化
+        schema = KnowledgeBaseSchema.model_validate(self)
+        return schema.model_dump(mode='json')

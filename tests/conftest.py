@@ -3,9 +3,14 @@ import sys
 import pytest
 import asyncio
 import pytest_asyncio
+import warnings
 from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import sessionmaker
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -27,10 +32,36 @@ def reset_state(request):
     """获取是否重置状态的参数值"""
     return request.config.getoption("--reset-state")
 
+# 配置pytest环境
+def pytest_configure(config):
+    """配置pytest运行环境"""
+    # 设置日志级别
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
+    logging.getLogger('fastapi').setLevel(logging.WARNING)
+    
+    # 忽略特定警告
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    warnings.filterwarnings("ignore", category=pytest.PytestDeprecationWarning)
+    warnings.filterwarnings("ignore", category=pytest.PytestCollectionWarning)
+    warnings.filterwarnings("ignore", message=".*declarative_base.*")
+    warnings.filterwarnings("ignore", message=".*class-based.*config.*")
+    warnings.filterwarnings("ignore", message=".*event_loop fixture.*")
+    warnings.filterwarnings("ignore", message=".*The asyncio_mode.*")
+    warnings.filterwarnings("ignore", message=".*cannot collect test class.*")
+    warnings.filterwarnings("ignore", message=".*Support for class-based.*")
+    warnings.filterwarnings("ignore", message=".*MovedIn20Warning.*")
+    
+    # 设置asyncio默认fixture作用域
+    config.option.asyncio_mode = "auto"
+    config.option.asyncio_default_fixture_loop_scope = "session"
+
 # 设置测试用的事件循环
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture(scope="session")
 def event_loop():
-    """创建一个会话级别的事件循环"""
+    """创建一个session范围的事件循环"""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
