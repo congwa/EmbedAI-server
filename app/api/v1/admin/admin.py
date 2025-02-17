@@ -8,7 +8,12 @@ from app.schemas.admin import AdminRegister
 from app.models.user import User
 from app.core.config import settings
 from app.core.security import get_password_hash
-from app.schemas.user import UserCreate, UserResponse, AdminChangeUserPasswordRequest
+from app.schemas.user import (
+    UserCreate, 
+    UserResponse, 
+    AdminChangeUserPasswordRequest,
+    UserStatusUpdate
+)
 from app.services.user import UserService
 from app.core.decorators import admin_required
 
@@ -168,5 +173,40 @@ async def admin_change_user_password(
         if success:
             return APIResponse.success(message="Password updated successfully")
         return APIResponse.error(code=400, message="Failed to update password")
+    except Exception as e:
+        return APIResponse.error(code=400, message=str(e))
+
+@router.put("/users/{user_id}/status", dependencies=[Depends(get_current_admin_user)])
+async def update_user_status(
+    user_id: int,
+    status_update: UserStatusUpdate,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新用户状态
+
+    管理员可以通过此接口启用或禁用用户账户。
+
+    Args:
+        user_id (int): 要更新状态的用户ID
+        status_update (UserStatusUpdate): 状态更新信息
+        current_user (User): 当前管理员用户
+        db (AsyncSession): 数据库会话
+
+    Returns:
+        APIResponse: 更新结果
+        
+    Raises:
+        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+    """
+    user_service = UserService(db)
+    try:
+        user = await user_service.update_user_status(user_id, status_update.is_active)
+        if user:
+            return APIResponse.success(
+                message="User status updated successfully",
+                data={"id": user.id, "is_active": user.is_active}
+            )
+        return APIResponse.error(code=404, message="User not found")
     except Exception as e:
         return APIResponse.error(code=400, message=str(e)) 

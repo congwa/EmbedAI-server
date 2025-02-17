@@ -166,3 +166,28 @@ class UserService:
         user.hashed_password = get_password_hash(new_password)
         await self.db.commit()
         return True
+
+    async def update_user_status(self, user_id: int, is_active: bool) -> Optional[User]:
+        """更新用户状态
+
+        Args:
+            user_id (int): 用户ID
+            is_active (bool): 是否激活用户
+
+        Returns:
+            Optional[User]: 更新成功返回更新后的用户对象，如果用户不存在返回None
+            
+        Raises:
+            ValidationError: 当用户不存在时抛出验证错误
+        """
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise ValidationError("User not found")
+            
+        user.is_active = is_active
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user

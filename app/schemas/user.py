@@ -3,10 +3,16 @@ from datetime import datetime
 from pydantic import EmailStr, Field
 from .base import CustomBaseModel
 
+class UserStatusUpdate(CustomBaseModel):
+    """用户状态更新请求模型"""
+    is_active: bool
+
 class UserBase(CustomBaseModel):
+    """用户基础模型"""
     email: EmailStr
 
 class UserCreate(UserBase):
+    """用户创建请求模型"""
     password: str
     is_admin: bool = False
 
@@ -19,8 +25,10 @@ class UserResponse(UserBase):
     secret_key: Optional[str]
     created_at: datetime
 
-class UserUpdate(UserBase):
+class UserUpdate(CustomBaseModel):
+    """用户更新请求模型"""
     password: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 class UserInDB(UserBase):
     id: int
@@ -28,6 +36,7 @@ class UserInDB(UserBase):
     is_active: bool
 
 class UserInfo(CustomBaseModel):
+    """用户信息响应模型"""
     id: int
     email: str
     is_admin: bool
@@ -35,11 +44,16 @@ class UserInfo(CustomBaseModel):
 
 # Pydantic模型(UserListItem)只返回安全的字段：
 class UserListItem(CustomBaseModel):
+    """用户列表项响应模型"""
     id: int
     email: str
+    is_active: bool
+    sdk_key: Optional[str]
+    secret_key: Optional[str]
+    created_at: datetime
 
 class Token(CustomBaseModel):
-    """Token响应模型"""
+    """登录令牌响应模型"""
     access_token: str
     user: UserInfo
 
