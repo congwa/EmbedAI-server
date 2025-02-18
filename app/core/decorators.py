@@ -118,8 +118,7 @@ def require_knowledge_base_permission(required_permission: PermissionType):
                 
             # 检查权限
             kb_service = KnowledgeBaseService(db)
-            kb = await kb_service.get(kb_id)
-            if not await kb.check_permission(kb_id, current_user.id, required_permission):
+            if not await kb_service.check_permission(kb_id, current_user.id, required_permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="没有足够的权限执行此操作"

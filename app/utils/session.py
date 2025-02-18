@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import asyncio
 from fast_graphrag import GraphRAG
 from app.core.logger import Logger
+from app.core.config import settings
+import copy
 
 class GraphRAGSession:
     def __init__(self, kb_id: str, llm_config: dict):
@@ -73,11 +75,91 @@ class SessionManager:
         if self.cleanup_task is None:
             self.cleanup_task = asyncio.create_task(self._cleanup_inactive_sessions())
     
-    async def get_session(self, kb_id: str, llm_config: dict) -> GraphRAGSession:
+    def _get_default_llm_config(self) -> Dict[str, Any]:
+        """获取默认的 LLM 配置"""
+        return copy.deepcopy(settings.DEFAULT_LLM_CONFIG)
+
+    def _merge_llm_config(self, user_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """合并用户配置和默认配置
+        
+        Args:
+            user_config: 用户提供的配置，可以为 None
+            
+        Returns:
+            Dict[str, Any]: 合并后的配置
+        """
+        config = self._get_default_llm_config()
+        if user_config:
+            # 合并 llm 配置
+            if "llm" in user_config:
+                config["llm"].update(user_config["llm"])
+            # 合并 embeddings 配置
+            if "embeddings" in user_config:
+                config["embeddings"].update(user_config["embeddings"])
+            # 合并其他顶级配置
+            for key, value in user_config.items():
+                if key not in ["llm", "embeddings"]:
+                    config[key] = value
+        return config
+
+    def _init_graphrag(self, llm_config: Optional[Dict[str, Any]] = None) -> GraphRAG:
+        """初始化 GraphRAG 实例
+        
+        Args:
+            llm_config: 用户提供的配置，可以为 None
+            
+        Returns:
+            GraphRAG: 配置好的 GraphRAG 实例
+        """
+        from fast_graphrag import GraphRAG
+        from fast_graphrag._llm import OpenAIEmbeddingService, OpenAILLMService
+        import instructor
+        
+        # 合并配置
+        config = self._merge_llm_config(llm_config)
+        
+        return GraphRAG(
+            working_dir=f"workspaces/kb_{self.kb_id}",
+            domain=config.get("domain", "通用知识领域"),
+            example_queries="\n".join(config.get("example_queries", [])),
+            entity_types=config.get("entity_types", []),
+            config=GraphRAG.Config(
+                llm_service=OpenAILLMService(
+                    model=config["llm"]["model"],
+                    base_url=config["llm"]["base_url"],
+                    api_key=config["llm"]["api_key"],
+                    mode=instructor.Mode.JSON,
+                    client="openai"
+                ),
+                embedding_service=OpenAIEmbeddingService(
+                    model=config["embeddings"]["model"],
+                    base_url=config["embeddings"]["base_url"],
+                    api_key=config["embeddings"]["api_key"],
+                    client="openai",
+                    embedding_dim=config["embeddings"]["embedding_dim"],
+                ),
+            ),
+        )
+
+    def get_session(self, kb_id: str, llm_config: Optional[Dict[str, Any]] = None):
+        """获取会话实例
+        
+        Args:
+            kb_id: 知识库 ID
+            llm_config: 用户提供的配置，可以为 None
+            
+        Returns:
+            GraphRAG: 配置好的 GraphRAG 实例
+        """
+        self.kb_id = kb_id
         if kb_id not in self.sessions:
-            self.sessions[kb_id] = GraphRAGSession(kb_id, llm_config)
+            self.sessions[kb_id] = self._init_graphrag(llm_config)
         self.sessions[kb_id].last_active = datetime.now()
         return self.sessions[kb_id]
+
+    def get_session_sync(self, kb_id: str, llm_config: Optional[Dict[str, Any]] = None):
+        """同步方式获取会话实例"""
+        return self.get_session(kb_id, llm_config)
     
     async def remove_session(self, kb_id: str):
         if kb_id in self.sessions:

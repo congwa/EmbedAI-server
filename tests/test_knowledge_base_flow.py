@@ -1,4 +1,5 @@
 import pytest
+from typing import Generator, AsyncGenerator
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from main import app
@@ -10,24 +11,22 @@ import pytest_asyncio
 import asyncio
 
 @pytest.fixture(scope="session")
-def state():
+def state() -> Generator[TestState, None, None]:
     """测试状态管理器"""
-    return TestState("knowledge_base_flow")
+    yield TestState("knowledge_base_flow")
 
 @pytest.fixture(scope="session")
-def client():
+def client() -> Generator[TestClient, None, None]:
     """测试客户端"""
-    return TestClient(app)
+    yield TestClient(app)
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_database(state):
+async def setup_database(state: TestState) -> AsyncGenerator[None, None]:
     """设置测试数据库"""
-    # 每次测试开始时都重置数据库和状态
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     state.reset()
-    
     yield
     
     # 测试完成后不清理数据库，以支持断点续测
@@ -104,10 +103,15 @@ async def step_create_knowledge_base(state: TestState, client: TestClient):
             "entity_types": ["实体1", "实体2"],
             "llm_config": {
                 "llm": {
-                    "model": "test-model"
+                    "model": "Qwen/Qwen2.5-7B-Instruct",
+                    "base_url": "https://api.siliconflow.cn/v1",
+                    "api_key": "test-api-key"
                 },
                 "embeddings": {
-                    "model": "test-embeddings"
+                    "model": "BAAI/bge-m3",
+                    "base_url": "https://api.siliconflow.cn/v1",
+                    "api_key": "test-api-key",
+                    "embedding_dim": 1536
                 }
             }
         },

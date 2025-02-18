@@ -3,10 +3,7 @@ from pydantic import Field, BaseModel
 from .base import CustomBaseModel
 from datetime import datetime
 from app.models.knowledge_base import TrainingStatus, PermissionType
-
-class LLMConfig(CustomBaseModel):
-    llm: Dict[str, Any]
-    embeddings: Dict[str, Any]
+from .llm import LLMConfig
 
 class KnowledgeBaseBase(CustomBaseModel):
     """知识库基础模型"""
@@ -17,9 +14,32 @@ class KnowledgeBaseCreate(BaseModel):
     """创建知识库请求"""
     name: str
     domain: str
-    example_queries: Optional[List[str]] = None
-    entity_types: Optional[List[str]] = None
-    llm_config: Optional[Dict[str, Any]] = None
+    example_queries: Optional[List[str]] = []
+    entity_types: Optional[List[str]] = []
+    llm_config: Optional[LLMConfig] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "测试知识库",
+                "domain": "通用领域",
+                "example_queries": ["问题1", "问题2"],
+                "entity_types": ["实体1", "实体2"],
+                "llm_config": {
+                    "llm": {
+                        "model": "gpt-3.5-turbo",
+                        "base_url": "https://api.openai.com/v1",
+                        "api_key": "your-api-key"
+                    },
+                    "embeddings": {
+                        "model": "text-embedding-3-small",
+                        "base_url": "https://api.openai.com/v1",
+                        "api_key": "your-api-key",
+                        "embedding_dim": 1536
+                    }
+                }
+            }
+        }
 
 class KnowledgeBaseUpdate(BaseModel):
     """更新知识库请求"""
@@ -27,7 +47,7 @@ class KnowledgeBaseUpdate(BaseModel):
     domain: Optional[str] = None
     example_queries: Optional[List[str]] = None
     entity_types: Optional[List[str]] = None
-    llm_config: Optional[Dict[str, Any]] = None
+    llm_config: Optional[LLMConfig] = None
 
 class KnowledgeBaseInDB(KnowledgeBaseBase):
     """数据库中的知识库模型"""
@@ -53,7 +73,7 @@ class KnowledgeBaseResponse(BaseModel):
     owner_id: int
     example_queries: Optional[List[str]] = None
     entity_types: Optional[List[str]] = None
-    llm_config: Optional[Dict[str, Any]] = None
+    llm_config: Optional[LLMConfig] = None
     working_dir: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -100,7 +120,7 @@ class KnowledgeBase(CustomBaseModel):
     domain: str
     example_queries: List[str]
     entity_types: List[str]
-    llm_config: Optional[Dict[str, Any]]
+    llm_config: Optional[LLMConfig]
     working_dir: Optional[str]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]

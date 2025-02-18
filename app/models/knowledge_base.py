@@ -17,7 +17,7 @@ class KnowledgeBase(Base):
     domain = Column(String, nullable=False)
     example_queries = Column(JSON, nullable=False)
     entity_types = Column(JSON, nullable=False)
-    llm_config = Column(JSON, nullable=False)
+    llm_config = Column(JSON, nullable=True)
     working_dir = Column(String, nullable=True)
     
     # 时间字段
@@ -59,10 +59,23 @@ class KnowledgeBase(Base):
             Dict[str, Any]: 包含所有字段的字典，时间字段会被格式化为 ISO 格式字符串
         """
         from app.schemas.knowledge_base import KnowledgeBase as KnowledgeBaseSchema
+        from app.schemas.llm import LLMConfig
         
+        # 如果 llm_config 是字典，转换为 LLMConfig 对象
+        if isinstance(self.llm_config, dict):
+            self.llm_config = LLMConfig.model_validate(self.llm_config)
+            
         # 使用 Pydantic 模型进行序列化
         schema = KnowledgeBaseSchema.model_validate(self)
-        return schema.model_dump(mode='json')
+        result = schema.model_dump(mode='json')
+        
+        # 处理成员列表中的枚举值
+        if result.get('members'):
+            for member in result['members']:
+                if 'permission' in member and isinstance(member['permission'], PermissionType):
+                    member['permission'] = member['permission'].value
+                    
+        return result
         
     async def get_member_permission(self, user_id: int) -> Optional[PermissionType]:
         """获取用户在知识库中的权限
@@ -87,51 +100,48 @@ class KnowledgeBase(Base):
         
     async def check_permission(
         self,
-        kb_id: int,
         user_id: int,
-        operation: str
+        required_permission: PermissionType
     ) -> bool:
-        """检查用户是否有权限执行特定操作
+        """检查用户对知识库的权限
         
         Args:
-            kb_id: 知识库ID
             user_id: 用户ID
-            operation: 操作名称
+            required_permission: 所需的权限级别
             
         Returns:
-            bool: 是否有权限执行操作
+            bool: 是否有权限
         """
-        # 获取用户信息
+        # 管理员用户拥有所有权限
         user = (await self.db.execute(
             select(User).filter(User.id == user_id)
         )).scalar_one_or_none()
         
-        if not user:
-            return False
-            
-        # 如果是所有者，直接返回 True
-        if user_id == self.owner_id:
+        if user and user.is_admin:
             return True
             
         # 查询用户权限
         permission = (await self.db.execute(
             select(knowledge_base_users).filter(
                 and_(
-                    knowledge_base_users.c.knowledge_base_id == kb_id,
+                    knowledge_base_users.c.knowledge_base_id == self.id,
                     knowledge_base_users.c.user_id == user_id
                 )
             )
         )).first()
         
-        # 如果用户是系统管理员且没有明确的知识库权限，赋予 VIEWER 权限
-        if user.is_admin and not permission:
-            return PermissionType.can_perform_operation(PermissionType.VIEWER, operation)
-            
-        # 如果没有权限记录且不是管理员，则无权限
         if not permission:
             return False
             
-        return PermissionType.can_perform_operation(permission.permission, operation)
+        # 权限等级检查
+        permission_levels = {
+            PermissionType.VIEWER: 0,
+            PermissionType.EDITOR: 1,
+            PermissionType.ADMIN: 2,
+            PermissionType.OWNER: 3
+        }
+        
+        return permission_levels[permission.permission] >= permission_levels[required_permission]
         
     async def get_all_members(self) -> List[Dict[str, Any]]:
         """获取所有成员信息
@@ -182,7 +192,7 @@ class KnowledgeBase(Base):
             raise ValueError("用户已是知识库成员")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, "add_member"):
+        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取当前用户有效权限
@@ -233,7 +243,7 @@ class KnowledgeBase(Base):
             raise ValueError("不能修改知识库所有者的权限")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, "update_member"):
+        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息
@@ -284,7 +294,7 @@ class KnowledgeBase(Base):
             raise ValueError("不能移除知识库所有者")
             
         # 检查操作权限
-        if not await self.check_permission(self.id, current_user_id, "remove_member"):
+        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息

@@ -90,14 +90,23 @@ class KnowledgeBaseService:
         owner_id: int
     ) -> KnowledgeBase:
         """创建新知识库"""
+        # 使用默认配置
+        llm_config = settings.DEFAULT_LLM_CONFIG
+        if kb.llm_config:
+            # 合并用户配置
+            if "llm" in kb.llm_config.model_dump():
+                llm_config.llm = kb.llm_config.llm
+            if "embeddings" in kb.llm_config.model_dump():
+                llm_config.embeddings = kb.llm_config.embeddings
+            
         db_kb = KnowledgeBase(
             name=kb.name,
             owner_id=owner_id,
             domain=kb.domain,
-            example_queries=kb.example_queries,
-            entity_types=kb.entity_types,
-            llm_config=kb.llm_config,
-            training_status=TrainingStatus.INIT  # 显式设置初始状态
+            example_queries=kb.example_queries or [],
+            entity_types=kb.entity_types or [],
+            llm_config=llm_config.model_dump(),  # 转换为字典
+            training_status=TrainingStatus.INIT
         )
         
         self.db.add(db_kb)
@@ -461,9 +470,11 @@ class KnowledgeBaseService:
                 select(User, knowledge_base_users.c.permission)
                 .join(
                     knowledge_base_users,
-                    User.id == knowledge_base_users.c.user_id
+                    and_(
+                        User.id == knowledge_base_users.c.user_id,
+                        knowledge_base_users.c.knowledge_base_id == kb.id
+                    )
                 )
-                .filter(knowledge_base_users.c.knowledge_base_id == kb.id)
             )
             
             # 构建成员列表
@@ -472,8 +483,9 @@ class KnowledgeBaseService:
                 member_list.append({
                     "id": member.id,
                     "email": member.email,
-                    "permission": permission,
-                    "is_owner": member.id == kb.owner_id
+                    "permission": permission.value if permission else None,  # 转换枚举为字符串
+                    "is_owner": member.id == kb.owner_id,
+                    "is_admin": member.is_admin
                 })
             
             # 构建知识库信息
@@ -544,17 +556,35 @@ class KnowledgeBaseService:
         Raises:
             HTTPException: 当用户没有权限或知识库不存在时
         """
-        kb = await self.get(kb_id)
-        if not await kb.check_permission(current_user_id, PermissionType.VIEWER):
+        if not await self.check_permission(kb_id, current_user_id, PermissionType.VIEWER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="没有足够的权限执行此操作"
             )
             
-        members = await kb.get_all_members()
+        # 获取知识库所有成员
+        members = await self.db.execute(
+            select(User, knowledge_base_users.c.permission)
+            .join(
+                knowledge_base_users,
+                User.id == knowledge_base_users.c.user_id
+            )
+            .filter(knowledge_base_users.c.knowledge_base_id == kb_id)
+        )
+        
+        member_list = []
+        for member, permission in members:
+            member_list.append({
+                "id": member.id,
+                "email": member.email,
+                "permission": permission.value if permission else None,
+                "is_owner": member.id == (await self.get(kb_id, current_user_id)).owner_id,
+                "is_admin": member.is_admin
+            })
+            
         return KnowledgeBaseMemberList(
-            members=[KnowledgeBaseMemberInfo(**m) for m in members],
-            total=len(members)
+            members=[KnowledgeBaseMemberInfo(**m) for m in member_list],
+            total=len(member_list)
         )
         
     async def add_knowledge_base_member(
