@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, JSON, ARRAY, DateTime, Enum
 from sqlalchemy.orm import relationship
+
 from .database import Base
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -7,6 +8,7 @@ from app.schemas.base import CustomBaseModel
 from sqlalchemy.sql import select, and_
 from .associations import knowledge_base_users
 from .enums import PermissionType, TrainingStatus
+from app.models import User
 
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
