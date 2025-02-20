@@ -11,36 +11,41 @@ from .enums import PermissionType, TrainingStatus
 from app.models import User
 
 class KnowledgeBase(Base):
+    """知识库模型
+    
+    用于存储知识库的基本信息、配置和训练状态
+    支持多用户协作和权限管理
+    """
     __tablename__ = "knowledge_bases"
+    __table_args__ = {'comment': '知识库表，存储知识库基本信息和训练状态'}
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    domain = Column(String, nullable=False)
-    example_queries = Column(JSON, nullable=False)
-    entity_types = Column(JSON, nullable=False)
-    llm_config = Column(JSON, nullable=True)
-    working_dir = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, index=True, comment='知识库ID')
+    name = Column(String, nullable=False, comment='知识库名称')
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, comment='所有者用户ID')
+    domain = Column(String, nullable=False, comment='知识库领域')
+    example_queries = Column(JSON, nullable=False, comment='示例查询列表，用于指导用户如何使用知识库')
+    entity_types = Column(JSON, nullable=False, comment='实体类型列表，用于定义知识库中的实体类型')
+    llm_config = Column(JSON, nullable=True, comment='LLM配置，包含模型和嵌入等配置信息')
+    working_dir = Column(String, nullable=True, comment='工作目录，用于存储知识库相关的文件')
     
     # 时间字段
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
     
     # 训练相关字段
-    training_status = Column(Enum(TrainingStatus), nullable=False, default=TrainingStatus.INIT)
-    training_started_at = Column(DateTime, nullable=True)
-    training_finished_at = Column(DateTime, nullable=True)
-    training_error = Column(String, nullable=True)
-    queued_at = Column(DateTime, nullable=True)
+    training_status = Column(Enum(TrainingStatus), nullable=False, default=TrainingStatus.INIT, comment='训练状态')
+    training_started_at = Column(DateTime, nullable=True, comment='训练开始时间')
+    training_finished_at = Column(DateTime, nullable=True, comment='训练完成时间')
+    training_error = Column(String, nullable=True, comment='训练错误信息')
+    queued_at = Column(DateTime, nullable=True, comment='进入训练队列的时间')
     
     # 关系定义
-    owner = relationship("User", back_populates="owned_knowledge_bases", foreign_keys=[owner_id])
-    documents = relationship("Document", back_populates="knowledge_base", cascade="all, delete-orphan")
+    owner = relationship("User", back_populates="owned_knowledge_bases", foreign_keys=[owner_id], passive_deletes=True)
+    documents = relationship("Document", back_populates="knowledge_base", cascade="all, delete-orphan", passive_deletes=True)
     users = relationship(
         "User", 
         secondary=knowledge_base_users,
         back_populates="knowledge_bases",
-        cascade="all, delete",
         passive_deletes=True
     )
     

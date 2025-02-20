@@ -1,22 +1,36 @@
 from enum import Enum
 
-class PermissionType(Enum):
-    """权限类型"""
-    OWNER = "owner"      # 所有者权限 完全控制权限
-    ADMIN = "admin"      # 管理员权限 管理权限，可以管理其他用户的访问权限
-    EDITOR = "editor"    # 编辑权限 编辑权限，可以添加/修改文档
-    VIEWER = "viewer"    # 查看权限  查看权限，只能查看和使用
+class PermissionType(str, Enum):
+    """权限类型枚举
+    
+    定义用户对知识库的权限级别
+    - VIEWER: 只读权限，可以查看和搜索
+    - EDITOR: 编辑权限，可以添加和修改文档
+    - ADMIN: 管理权限，可以管理成员和设置
+    - OWNER: 所有者权限，完全控制权限
+    """
+    VIEWER = "viewer"  # 查看者权限
+    EDITOR = "editor"  # 编辑者权限
+    ADMIN = "admin"    # 管理员权限
+    OWNER = "owner"    # 所有者权限
 
     @classmethod
-    def get_permission_level(cls, permission: 'PermissionType') -> int:
-        """获取权限等级"""
+    def get_permission_level(cls, permission_type: 'PermissionType') -> int:
+        """获取权限级别值
+        
+        Args:
+            permission_type: 权限类型
+            
+        Returns:
+            int: 权限级别值，数值越大权限越高
+        """
         permission_levels = {
             cls.VIEWER: 0,
             cls.EDITOR: 1,
             cls.ADMIN: 2,
             cls.OWNER: 3
         }
-        return permission_levels[permission]
+        return permission_levels.get(permission_type, -1)
 
     @classmethod
     def check_permission_level(cls, current: 'PermissionType', required: 'PermissionType') -> bool:
@@ -44,10 +58,18 @@ class PermissionType(Enum):
         """检查权限是否可以执行特定操作"""
         return operation in cls.get_allowed_operations(permission)
 
-class TrainingStatus(Enum):
-    """训练状态"""
-    INIT = "init"
-    QUEUED = "queued"
-    TRAINING = "training"
-    TRAINED = "trained"
-    FAILED = "failed" 
+class TrainingStatus(str, Enum):
+    """训练状态枚举
+    
+    定义知识库的训练状态
+    - INIT: 初始状态，未开始训练
+    - QUEUED: 已加入训练队列
+    - TRAINING: 训练中
+    - TRAINED: 训练完成
+    - FAILED: 训练失败
+    """
+    INIT = "init"        # 初始状态
+    QUEUED = "queued"    # 排队中
+    TRAINING = "training"  # 训练中
+    TRAINED = "trained"    # 训练完成
+    FAILED = "failed"      # 训练失败 
