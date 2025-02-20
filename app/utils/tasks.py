@@ -8,6 +8,7 @@ from app.utils.session import SessionManager
 from app.models.database import AsyncSessionLocal
 from sqlalchemy import select
 from app.core.logger import Logger
+from app.core.redis_manager import redis_manager
 
 # 修改为从huey导入crontab
 from huey import crontab
@@ -16,11 +17,10 @@ from huey import RedisHuey
 # 初始化Huey实例
 from app.core.config import settings
 
-huey = RedisHuey('knowledge-base-training',
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=settings.REDIS_DB,
-    password=settings.REDIS_PASSWORD)
+huey = RedisHuey(
+    'knowledge-base-training',
+    connection_pool=redis_manager._redis.connection_pool if redis_manager._redis else None
+)
 
 @huey.task()
 def train_knowledge_base(kb_id: int):
@@ -136,24 +136,27 @@ def check_queued_knowledge_bases():
                 )).scalar_one_or_none()
 
                 if not training_kb:
-                    # 获取最早排队的知识库
-                    queued_kb = (await db.execute(
-                        select(KnowledgeBase).filter(
-                            KnowledgeBase.training_status == TrainingStatus.QUEUED
-                        ).order_by(KnowledgeBase.queued_at)
-                    )).scalar_one_or_none()
+                    # 获取下一个待训练的知识库ID
+                    next_kb_id = await redis_manager.get_next_training_task()
+                    if next_kb_id:
+                        # 获取知识库信息
+                        queued_kb = (await db.execute(
+                            select(KnowledgeBase).filter(
+                                KnowledgeBase.id == next_kb_id
+                            )
+                        )).scalar_one_or_none()
 
-                    if queued_kb:
-                        Logger.info(f"Starting training for queued knowledge base {queued_kb.id}")
-                        # 更新状态为训练中
-                        queued_kb.training_status = TrainingStatus.TRAINING
-                        queued_kb.training_started_at = datetime.now()
-                        queued_kb.training_error = None
-                        queued_kb.queued_at = None
-                        await db.commit()
-                        
-                        # 启动训练任务
-                        train_knowledge_base(queued_kb.id)
+                        if queued_kb:
+                            Logger.info(f"Starting training for queued knowledge base {queued_kb.id}")
+                            # 更新状态为训练中
+                            queued_kb.training_status = TrainingStatus.TRAINING
+                            queued_kb.training_started_at = datetime.now()
+                            queued_kb.training_error = None
+                            queued_kb.queued_at = None
+                            await db.commit()
+                            
+                            # 启动训练任务
+                            train_knowledge_base(queued_kb.id)
 
             except Exception as e:
                 Logger.error(f"Error checking queued knowledge bases: {str(e)}")

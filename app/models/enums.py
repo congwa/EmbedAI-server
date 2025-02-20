@@ -72,4 +72,28 @@ class TrainingStatus(str, Enum):
     QUEUED = "queued"    # 排队中
     TRAINING = "training"  # 训练中
     TRAINED = "trained"    # 训练完成
-    FAILED = "failed"      # 训练失败 
+    FAILED = "failed"      # 训练失败
+
+class ChatMode(str, Enum):
+    """聊天模式枚举
+    
+    定义聊天会话的模式
+    - AI: AI模式，使用知识库回答
+    - HUMAN: 人工模式，管理员回答
+    """
+    AI = "ai"          # AI模式，使用知识库回答
+    HUMAN = "human"    # 人工模式，管理员回答
+
+class MessageType(str, Enum):
+    """消息类型枚举
+    
+    定义聊天消息的类型
+    - USER: 用户发送的消息
+    - ASSISTANT: AI助手的回复
+    - ADMIN: 管理员的回复
+    - SYSTEM: 系统消息
+    """
+    USER = "user"          # 用户消息
+    ASSISTANT = "assistant"  # AI助手消息
+    ADMIN = "admin"        # 管理员消息
+    SYSTEM = "system"      # 系统消息（如模式切换提示等） 

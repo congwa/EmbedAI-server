@@ -3,6 +3,7 @@
         "AILLM",
         "grag",
         "ilike",
-        "ondelete"
+        "ondelete",
+        "selectinload"
     ]
 }

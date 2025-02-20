@@ -2,7 +2,7 @@ from typing import Optional, Callable, Any
 from datetime import timedelta
 from functools import wraps
 from fastapi import Request, HTTPException
-from app.utils.cache import CacheManager
+from app.core.redis_manager import redis_manager
 
 class RateLimiter:
     def __init__(
@@ -16,13 +16,15 @@ class RateLimiter:
         self.max_requests = max_requests
         self.time_window = time_window
         self.key_func = key_func or self._default_key_func
-        self.cache = CacheManager()
     
     async def is_allowed(self, request: Request) -> bool:
         """检查请求是否允许通过"""
         key = f"{self.key_prefix}:{self.key_func(request)}"
-        count = await self.cache.incr(key, expire=self.time_window)
-        return count <= self.max_requests
+        return await redis_manager.check_rate_limit(
+            key=key,
+            max_requests=self.max_requests,
+            time_window=self.time_window
+        )
     
     def _default_key_func(self, request: Request) -> str:
         """默认使用IP作为限制键"""

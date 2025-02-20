@@ -48,6 +48,7 @@ class KnowledgeBase(Base):
         back_populates="knowledge_bases",
         passive_deletes=True
     )
+    chats = relationship("Chat", back_populates="knowledge_base", cascade="all, delete-orphan")
     
     @property
     def can_train(self) -> bool:
