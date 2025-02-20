@@ -1,12 +1,14 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
-from sqlalchemy import desc
+from sqlalchemy import desc, select, and_, or_
 from app.models.document import Document, DocumentType
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPagination, DocumentResponse
 from app.core.exceptions import NotFoundError
-from sqlalchemy.sql import select, func
+from sqlalchemy.sql import func
 from app.models.knowledge_base import KnowledgeBase, TrainingStatus
+from fastapi import HTTPException, status, UploadFile
+from app.core.logger import Logger
 
 class DocumentService:
     """文档服务类
@@ -21,60 +23,77 @@ class DocumentService:
         """
         self.db = db
 
-    async def create(self, doc_in: DocumentCreate, knowledge_base_id: int, created_by_id: int) -> Document:
-        """创建新文档
-
-        Args:
-            doc_in (DocumentCreate): 文档创建模型
-            knowledge_base_id (int): 知识库ID
-            created_by_id (int): 创建者用户ID
-
-        Returns:
-            Document: 创建成功的文档对象
-        """
-        # 获取知识库
+    async def create(
+        self,
+        document: DocumentCreate,
+        file: Optional[UploadFile] = None
+    ) -> Document:
+        """创建新文档"""
+        Logger.info(f"Creating new document '{document.title}' for knowledge base {document.knowledge_base_id}")
+        
+        # 检查知识库是否存在
         kb = (await self.db.execute(
-            select(KnowledgeBase).filter(KnowledgeBase.id == knowledge_base_id)
+            select(KnowledgeBase).filter(KnowledgeBase.id == document.knowledge_base_id)
         )).scalar_one_or_none()
+        
         if not kb:
-            raise ValueError("Knowledge base not found")
+            Logger.error(f"Document creation failed: Knowledge base {document.knowledge_base_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
 
-        # 创建文档
-        doc = Document(
-            title=doc_in.title,
-            content=doc_in.content,
-            doc_type=doc_in.doc_type,
-            knowledge_base_id=knowledge_base_id,
-            created_by_id=created_by_id
+        # 创建文档记录
+        db_document = Document(
+            title=document.title,
+            content=document.content,
+            doc_type=document.doc_type,
+            knowledge_base_id=document.knowledge_base_id,
+            metadata=document.metadata or {},
+            source_url=document.source_url
         )
-        self.db.add(doc)
         
-        # 更新知识库状态为 INIT
-        kb.training_status = TrainingStatus.INIT
-        kb.training_started_at = None
-        kb.training_finished_at = None
-        kb.training_error = None
-        kb.queued_at = None
-        
+        if file:
+            Logger.debug(f"Processing uploaded file '{file.filename}' for document '{document.title}'")
+            # 处理文件上传逻辑
+            try:
+                # 这里添加文件处理逻辑
+                pass
+            except Exception as e:
+                Logger.error(f"File processing failed for document '{document.title}': {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"文件处理失败: {str(e)}"
+                )
+
+        self.db.add(db_document)
         await self.db.commit()
-        await self.db.refresh(doc)
-        return doc
+        await self.db.refresh(db_document)
+        
+        Logger.info(f"Document '{document.title}' (ID: {db_document.id}) created successfully")
+        return db_document
 
-    async def get(self, doc_id: int) -> Optional[Document]:
-        """获取指定ID的文档
-
-        Args:
-            doc_id (int): 文档ID
-
-        Returns:
-            Optional[Document]: 文档对象，如果不存在则返回None
-        """
-        return (await self.db.execute(
+    async def get(self, document_id: int) -> Document:
+        """获取文档详情"""
+        Logger.debug(f"Retrieving document {document_id}")
+        
+        document = (await self.db.execute(
             select(Document).filter(
-                Document.id == doc_id,
-                Document.is_deleted == False
+                and_(
+                    Document.id == document_id,
+                    Document.is_deleted == False
+                )
             )
         )).scalar_one_or_none()
+        
+        if not document:
+            Logger.warning(f"Document retrieval failed: Document {document_id} not found or deleted")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文档不存在或已删除"
+            )
+            
+        return document
 
     async def get_multi(
         self,
@@ -85,92 +104,110 @@ class DocumentService:
         doc_type: Optional[DocumentType] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
-    ) -> DocumentPagination:
-        """获取文档列表
-
-        Args:
-            knowledge_base_id (int): 知识库ID
-            skip (int): 分页偏移量
-            limit (int): 每页数量
-            title (Optional[str]): 文档标题（模糊搜索）
-            doc_type (Optional[DocumentType]): 文档类型
-            start_time (Optional[datetime]): 创建时间范围开始
-            end_time (Optional[datetime]): 创建时间范围结束
-
-        Returns:
-            DocumentPagination: 分页的文档列表
-        """
-        query = select(Document).filter(
+    ) -> Dict[str, Any]:
+        """获取文档列表"""
+        Logger.info(f"Retrieving documents for knowledge base {knowledge_base_id}")
+        
+        # 构建查询条件
+        conditions = [
             Document.knowledge_base_id == knowledge_base_id,
             Document.is_deleted == False
-        )
-
-        # 添加可选的查询条件
+        ]
+        
         if title:
-            query = query.filter(Document.title.ilike(f"%{title}%"))
+            conditions.append(Document.title.ilike(f"%{title}%"))
         if doc_type:
-            query = query.filter(Document.doc_type == doc_type)
+            conditions.append(Document.doc_type == doc_type)
         if start_time:
-            query = query.filter(Document.created_at >= start_time)
+            conditions.append(Document.created_at >= start_time)
         if end_time:
-            query = query.filter(Document.created_at <= end_time)
+            conditions.append(Document.created_at <= end_time)
+            
+        # 执行查询
+        try:
+            total = (await self.db.execute(
+                select(Document).filter(and_(*conditions))
+            )).scalars().all()
+            
+            documents = (await self.db.execute(
+                select(Document)
+                .filter(and_(*conditions))
+                .offset(skip)
+                .limit(limit)
+            )).scalars().all()
+            
+            Logger.debug(f"Retrieved {len(documents)} documents (total: {len(total)}) for knowledge base {knowledge_base_id}")
+            
+            return {
+                "total": len(total),
+                "items": documents
+            }
+        except Exception as e:
+            Logger.error(f"Document retrieval failed for knowledge base {knowledge_base_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"获取文档列表失败: {str(e)}"
+            )
 
-        total = (await self.db.execute(
-            select(func.count()).select_from(query.subquery())
-        )).scalar()
+    async def update(
+        self,
+        document_id: int,
+        document: DocumentUpdate
+    ) -> Document:
+        """更新文档"""
+        Logger.info(f"Updating document {document_id}")
+        
+        # 查找现有文档
+        db_document = (await self.db.execute(
+            select(Document).filter(Document.id == document_id)
+        )).scalar_one_or_none()
+        
+        if not db_document:
+            Logger.error(f"Document update failed: Document {document_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文档不存在"
+            )
 
-        items = (await self.db.execute(
-            query.order_by(desc(Document.created_at)).offset(skip).limit(limit)
-        )).scalars().all()
+        # 更新文档字段
+        update_data = document.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_document, field, value)
+            
+        try:
+            await self.db.commit()
+            await self.db.refresh(db_document)
+            Logger.info(f"Document {document_id} updated successfully")
+            return db_document
+        except Exception as e:
+            Logger.error(f"Document update failed for document {document_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"文档更新失败: {str(e)}"
+            )
 
-        return DocumentPagination(
-            total=total,
-            page=skip // limit + 1,
-            page_size=limit,
-            items=[DocumentResponse.model_validate(item) for item in items]
-        )
+    async def delete(self, document_id: int) -> None:
+        """删除文档"""
+        Logger.info(f"Deleting document {document_id}")
+        
+        # 查找文档
+        db_document = (await self.db.execute(
+            select(Document).filter(Document.id == document_id)
+        )).scalar_one_or_none()
+        
+        if not db_document:
+            Logger.warning(f"Document deletion skipped: Document {document_id} not found")
+            return
 
-    async def update(self, doc_id: int, doc_in: DocumentUpdate) -> Document:
-        """更新文档
-
-        Args:
-            doc_id (int): 文档ID
-            doc_in (DocumentUpdate): 文档更新模型
-
-        Returns:
-            Document: 更新后的文档对象
-
-        Raises:
-            NotFoundError: 文档不存在时抛出此异常
-        """
-        doc = await self.get(doc_id)
-        if not doc:
-            raise NotFoundError("Document not found")
-
-        for field, value in doc_in.model_dump(exclude_unset=True).items():
-            setattr(doc, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(doc)
-        return doc
-
-    async def delete(self, doc_id: int) -> Document:
-        """软删除文档
-
-        Args:
-            doc_id (int): 文档ID
-
-        Returns:
-            Document: 被删除的文档对象
-
-        Raises:
-            NotFoundError: 文档不存在时抛出此异常
-        """
-        doc = await self.get(doc_id)
-        if not doc:
-            raise NotFoundError("Document not found")
-
-        doc.is_deleted = True
-        await self.db.commit()
-        await self.db.refresh(doc)
-        return doc
+        try:
+            # 软删除
+            db_document.is_deleted = True
+            db_document.deleted_at = datetime.now()
+            await self.db.commit()
+            Logger.info(f"Document {document_id} marked as deleted successfully")
+        except Exception as e:
+            Logger.error(f"Document deletion failed for document {document_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"文档删除失败: {str(e)}"
+            )

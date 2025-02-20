@@ -23,6 +23,7 @@ from app.utils.session import SessionManager
 from app.utils.rate_limit import rate_limit
 from app.core.config import settings
 from sqlalchemy.sql import select
+from app.core.logger import Logger
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
@@ -42,6 +43,7 @@ class KnowledgeBaseService:
         )).scalar_one_or_none()
         
         if user and user.is_admin:
+            Logger.debug(f"Admin user {user.email} granted all permissions for knowledge base {kb_id}")
             return True
             
         # 查询用户权限
@@ -55,6 +57,7 @@ class KnowledgeBaseService:
         )).first()
         
         if not permission:
+            Logger.warning(f"Permission check failed: User {user_id} has no permission for knowledge base {kb_id}")
             return False
             
         # 权限等级检查
@@ -65,7 +68,12 @@ class KnowledgeBaseService:
             PermissionType.OWNER: 3
         }
         
-        return permission_levels[permission.permission] >= permission_levels[required_permission]
+        has_permission = permission_levels[permission.permission] >= permission_levels[required_permission]
+        if not has_permission:
+            Logger.warning(f"Permission check failed: User {user_id} has insufficient permission level ({permission.permission}) for required level ({required_permission}) on knowledge base {kb_id}")
+        else:
+            Logger.debug(f"Permission check passed: User {user_id} has sufficient permission ({permission.permission}) for required level ({required_permission}) on knowledge base {kb_id}")
+        return has_permission
 
     async def get_user_permission(
         self,
@@ -90,6 +98,8 @@ class KnowledgeBaseService:
         owner_id: int
     ) -> KnowledgeBase:
         """创建新知识库"""
+        Logger.info(f"Creating new knowledge base '{kb.name}' for owner {owner_id}")
+        
         # 使用默认配置
         llm_config = settings.DEFAULT_LLM_CONFIG
         if kb.llm_config:
@@ -98,6 +108,7 @@ class KnowledgeBaseService:
                 llm_config.llm = kb.llm_config.llm
             if "embeddings" in kb.llm_config.model_dump():
                 llm_config.embeddings = kb.llm_config.embeddings
+            Logger.debug(f"Custom LLM config provided for knowledge base '{kb.name}'")
             
         db_kb = KnowledgeBase(
             name=kb.name,
@@ -105,7 +116,7 @@ class KnowledgeBaseService:
             domain=kb.domain,
             example_queries=kb.example_queries or [],
             entity_types=kb.entity_types or [],
-            llm_config=llm_config.model_dump(),  # 转换为字典
+            llm_config=llm_config.model_dump(),
             training_status=TrainingStatus.INIT
         )
         
@@ -124,6 +135,7 @@ class KnowledgeBaseService:
         
         await self.db.commit()
         await self.db.refresh(db_kb)
+        Logger.info(f"Knowledge base '{kb.name}' (ID: {db_kb.id}) created successfully")
         return db_kb
 
     async def train(
@@ -195,19 +207,12 @@ class KnowledgeBaseService:
         query: str,
         top_k: int = 5
     ) -> dict:
-        """查询知识库
-
-        Args:
-            kb_id (int): 知识库ID
-            user_id (int): 用户ID
-            query (str): 查询内容
-            top_k (int, optional): 返回结果数量. Defaults to 5.
-
-        Returns:
-            dict: 查询结果
-        """
+        """查询知识库"""
+        Logger.info(f"Processing query request for knowledge base {kb_id} from user {user_id}")
+        
         # 检查权限
         if not await self.check_permission(kb_id, user_id, PermissionType.VIEWER):
+            Logger.warning(f"Query rejected: User {user_id} has no permission to query knowledge base {kb_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="没有足够的权限执行此操作"
@@ -218,12 +223,14 @@ class KnowledgeBaseService:
         )).scalar_one_or_none()
         
         if not kb:
+            Logger.error(f"Query failed: Knowledge base {kb_id} not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="知识库不存在"
             )
 
         if kb.training_status != TrainingStatus.TRAINED:
+            Logger.warning(f"Query rejected: Knowledge base {kb_id} not trained yet (status: {kb.training_status})")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="知识库尚未训练完成"
@@ -236,16 +243,23 @@ class KnowledgeBaseService:
         )
 
         # 执行查询
-        result = session.query(query, top_k=top_k)
-
-        return {
-            "query": query,
-            "results": result,
-            "metadata": {
-                "kb_id": kb_id,
-                "top_k": top_k
+        try:
+            result = session.query(query, top_k=top_k)
+            Logger.info(f"Query successful for knowledge base {kb_id}: '{query[:100]}...' (if longer)")
+            return {
+                "query": query,
+                "results": result,
+                "metadata": {
+                    "kb_id": kb_id,
+                    "top_k": top_k
+                }
             }
-        }
+        except Exception as e:
+            Logger.error(f"Query failed for knowledge base {kb_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"查询执行失败: {str(e)}"
+            )
 
     async def get(self, kb_id: int, user_id: int) -> KnowledgeBase:
         """获取知识库详情

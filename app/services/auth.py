@@ -10,6 +10,7 @@ from app.models.database import get_db
 from app.models.user import User
 from app.schemas.auth import TokenData
 from datetime import datetime, timedelta
+from app.core.logger import Logger
 
 # 配置OAuth2密码Bearer认证方案，指定token获取的URL端点
 oauth2_scheme = OAuth2PasswordBearer(
@@ -33,8 +34,15 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Opti
     stmt = select(User).where(User.email == email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    if not user or not verify_password(password, user.hashed_password):
+    
+    if not user:
+        Logger.warning(f"Authentication failed: User not found with email {email}")
         return None
+    if not verify_password(password, user.hashed_password):
+        Logger.warning(f"Authentication failed: Invalid password for user {email}")
+        return None
+        
+    Logger.info(f"User {email} authenticated successfully")
     return user
 
 async def get_current_user(
@@ -64,16 +72,21 @@ async def get_current_user(
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         email: str = payload.get("sub")
         if email is None:
+            Logger.warning("Token validation failed: Missing email in payload")
             raise credentials_exception
         token_data = TokenData(email=email)
-    except JWTError:
+    except JWTError as e:
+        Logger.error(f"Token validation failed: {str(e)}")
         raise credentials_exception
 
     stmt = select(User).where(User.email == token_data.email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None:
+        Logger.warning(f"Token validation failed: User not found with email {token_data.email}")
         raise credentials_exception
+        
+    Logger.debug(f"Current user retrieved successfully: {user.email}")
     return user
 
 async def get_current_admin_user(
@@ -93,10 +106,12 @@ async def get_current_admin_user(
         HTTPException: 当用户不是管理员时抛出403权限错误
     """
     if not current_user.is_admin:
+        Logger.warning(f"Admin access denied for user {current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges"
         )
+    Logger.info(f"Admin access granted for user {current_user.email}")
     return current_user
 
 async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[User], Optional[str]]:
@@ -116,6 +131,7 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
     """
     # 验证必要的请求头
     if not all(headers.values()):
+        Logger.warning("SDK authentication failed: Missing required headers")
         return False, None, "Missing required SDK authentication headers"
 
     # 验证时间戳（5分钟有效期）
@@ -123,8 +139,10 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
         ts = int(headers['timestamp'])
         current_time = datetime.now().timestamp()
         if abs(current_time - ts) > 300:
+            Logger.warning(f"SDK authentication failed: Timestamp expired - Request time: {ts}, Current time: {int(current_time)}")
             return False, None, "Request timestamp expired"
     except ValueError:
+        Logger.error(f"SDK authentication failed: Invalid timestamp format - {headers['timestamp']}")
         return False, None, "Invalid timestamp format"
 
     # 获取数据库会话并查找用户
@@ -132,6 +150,7 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
     user = db.query(User).filter(User.sdk_key == headers['sdk_key']).first()
 
     if not user or not user.secret_key:
+        Logger.warning(f"SDK authentication failed: Invalid SDK key - {headers['sdk_key']}")
         return False, None, "Invalid SDK key"
 
     # 验证签名
@@ -142,6 +161,8 @@ async def verify_sdk_auth(headers: dict, body_str: str) -> tuple[bool, Optional[
         user.secret_key,
         headers['signature']
     ):
+        Logger.warning(f"SDK authentication failed: Invalid signature for user {user.email}")
         return False, None, "Invalid signature"
 
+    Logger.info(f"SDK authentication successful for user {user.email}")
     return True, user, None
