@@ -8,7 +8,6 @@ from .llm import LLMConfig
 class KnowledgeBaseBase(CustomBaseModel):
     """知识库基础模型"""
     name: str = Field(..., description="知识库名称")
-    description: Optional[str] = Field(None, description="知识库描述")
 
 class KnowledgeBaseCreate(BaseModel):
     """创建知识库请求"""

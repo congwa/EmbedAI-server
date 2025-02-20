@@ -5,6 +5,9 @@ from fast_graphrag import GraphRAG
 from app.core.logger import Logger
 from app.core.config import settings
 import copy
+from sqlalchemy import select
+from app.models.knowledge_base import KnowledgeBase
+from sqlalchemy.orm import Session
 
 class GraphRAGSession:
     def __init__(self, kb_id: str, llm_config: dict):
@@ -17,8 +20,19 @@ class GraphRAGSession:
         from fast_graphrag._llm import OpenAIEmbeddingService, OpenAILLMService
         import instructor
         
+        # 从数据库获取知识库信息
+        kb = self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == self.kb_id)
+        ).scalar_one_or_none()
+        
+        if not kb:
+            raise ValueError(f"Knowledge base {self.kb_id} not found")
+        
+        if not kb.working_dir:
+            raise ValueError(f"Knowledge base {self.kb_id} has no working directory")
+        
         return GraphRAG(
-            working_dir=f"workspaces/kb_{self.kb_id}",
+            working_dir=kb.working_dir,  # 使用知识库的工作目录
             domain=llm_config.get("domain", "通用知识领域"),
             example_queries="\n".join(llm_config.get("example_queries", [])),
             entity_types=llm_config.get("entity_types", []),
@@ -69,11 +83,14 @@ class SessionManager:
             cls._instance = super(SessionManager, cls).__new__(cls)
             cls._instance.sessions = {}
             cls._instance.cleanup_task = None
+            cls._instance.db = None
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, db: Optional[Session] = None):
         if self.cleanup_task is None:
             self.cleanup_task = asyncio.create_task(self._cleanup_inactive_sessions())
+        if db is not None:
+            self.db = db
     
     def _get_default_llm_config(self) -> Dict[str, Any]:
         """获取默认的 LLM 配置"""
@@ -102,41 +119,41 @@ class SessionManager:
                     config[key] = value
         return config
 
-    def _init_graphrag(self, llm_config: Optional[Dict[str, Any]] = None) -> GraphRAG:
-        """初始化 GraphRAG 实例
-        
-        Args:
-            llm_config: 用户提供的配置，可以为 None
-            
-        Returns:
-            GraphRAG: 配置好的 GraphRAG 实例
-        """
+    def _init_graphrag(self, llm_config: dict) -> GraphRAG:
         from fast_graphrag import GraphRAG
         from fast_graphrag._llm import OpenAIEmbeddingService, OpenAILLMService
         import instructor
         
-        # 合并配置
-        config = self._merge_llm_config(llm_config)
+        # 从数据库获取知识库信息
+        kb = self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == self.kb_id)
+        ).scalar_one_or_none()
+        
+        if not kb:
+            raise ValueError(f"Knowledge base {self.kb_id} not found")
+        
+        if not kb.working_dir:
+            raise ValueError(f"Knowledge base {self.kb_id} has no working directory")
         
         return GraphRAG(
-            working_dir=f"workspaces/kb_{self.kb_id}",
-            domain=config.get("domain", "通用知识领域"),
-            example_queries="\n".join(config.get("example_queries", [])),
-            entity_types=config.get("entity_types", []),
+            working_dir=kb.working_dir,  # 使用知识库的工作目录
+            domain=llm_config.get("domain", "通用知识领域"),
+            example_queries="\n".join(llm_config.get("example_queries", [])),
+            entity_types=llm_config.get("entity_types", []),
             config=GraphRAG.Config(
                 llm_service=OpenAILLMService(
-                    model=config["llm"]["model"],
-                    base_url=config["llm"]["base_url"],
-                    api_key=config["llm"]["api_key"],
+                    model=llm_config["llm"]["model"],
+                    base_url=llm_config["llm"]["base_url"],
+                    api_key=llm_config["llm"]["api_key"],
                     mode=instructor.Mode.JSON,
                     client="openai"
                 ),
                 embedding_service=OpenAIEmbeddingService(
-                    model=config["embeddings"]["model"],
-                    base_url=config["embeddings"]["base_url"],
-                    api_key=config["embeddings"]["api_key"],
+                    model=llm_config["embeddings"]["model"],
+                    base_url=llm_config["embeddings"]["base_url"],
+                    api_key=llm_config["embeddings"]["api_key"],
                     client="openai",
-                    embedding_dim=config["embeddings"]["embedding_dim"],
+                    embedding_dim=llm_config["embeddings"]["embedding_dim"],
                 ),
             ),
         )

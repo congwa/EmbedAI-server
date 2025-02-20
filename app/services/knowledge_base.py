@@ -28,7 +28,7 @@ from app.core.logger import Logger
 class KnowledgeBaseService:
     def __init__(self, db: Session):
         self.db = db
-        self.session_manager = SessionManager()
+        self.session_manager = SessionManager(db)
 
     async def check_permission(
         self,
@@ -110,6 +110,9 @@ class KnowledgeBaseService:
                 llm_config.embeddings = kb.llm_config.embeddings
             Logger.debug(f"Custom LLM config provided for knowledge base '{kb.name}'")
             
+        # 生成工作目录路径
+        working_dir = f"workspaces/kb_{owner_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
         db_kb = KnowledgeBase(
             name=kb.name,
             owner_id=owner_id,
@@ -117,7 +120,8 @@ class KnowledgeBaseService:
             example_queries=kb.example_queries or [],
             entity_types=kb.entity_types or [],
             llm_config=llm_config.model_dump(),
-            training_status=TrainingStatus.INIT
+            training_status=TrainingStatus.INIT,
+            working_dir=working_dir  # 设置工作目录
         )
         
         self.db.add(db_kb)
@@ -135,7 +139,7 @@ class KnowledgeBaseService:
         
         await self.db.commit()
         await self.db.refresh(db_kb)
-        Logger.info(f"Knowledge base '{kb.name}' (ID: {db_kb.id}) created successfully")
+        Logger.info(f"Knowledge base '{kb.name}' (ID: {db_kb.id}) created successfully with working directory: {working_dir}")
         return db_kb
 
     async def train(
