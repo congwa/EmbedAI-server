@@ -1,19 +1,18 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
-from sqlalchemy import desc, select, and_, or_
+from sqlalchemy import select, and_
 from app.models.document import Document, DocumentType
-from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPagination, DocumentResponse
-from app.core.exceptions import NotFoundError
-from sqlalchemy.sql import func
-from app.models.knowledge_base import KnowledgeBase, TrainingStatus
-from fastapi import HTTPException, status, UploadFile
+from app.schemas.document import DocumentCreate, DocumentUpdate
+from app.models.knowledge_base import KnowledgeBase
+from fastapi import HTTPException, status
 from app.core.logger import Logger
 
 class DocumentService:
     """文档服务类
 
     处理文档相关的业务逻辑，包括文档的创建、查询、更新和软删除
+    目前仅支持文本类型文档
     """
     def __init__(self, db: Session):
         """初始化文档服务
@@ -26,10 +25,27 @@ class DocumentService:
     async def create(
         self,
         document: DocumentCreate,
-        file: Optional[UploadFile] = None
     ) -> Document:
-        """创建新文档"""
+        """创建新文档
+        
+        Args:
+            document (DocumentCreate): 文档创建模型，目前仅支持文本类型
+            
+        Returns:
+            Document: 创建的文档对象
+            
+        Raises:
+            HTTPException: 当知识库不存在或文档类型不支持时抛出
+        """
         Logger.info(f"Creating new document '{document.title}' for knowledge base {document.knowledge_base_id}")
+        
+        # 检查文档类型
+        if document.doc_type != DocumentType.TEXT:
+            Logger.error(f"Document creation failed: Unsupported document type {document.doc_type}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="目前仅支持文本类型文档"
+            )
         
         # 检查知识库是否存在
         kb = (await self.db.execute(
@@ -47,24 +63,9 @@ class DocumentService:
         db_document = Document(
             title=document.title,
             content=document.content,
-            doc_type=document.doc_type,
-            knowledge_base_id=document.knowledge_base_id,
-            metadata=document.metadata or {},
-            source_url=document.source_url
+            doc_type=DocumentType.TEXT,
+            knowledge_base_id=document.knowledge_base_id
         )
-        
-        if file:
-            Logger.debug(f"Processing uploaded file '{file.filename}' for document '{document.title}'")
-            # 处理文件上传逻辑
-            try:
-                # 这里添加文件处理逻辑
-                pass
-            except Exception as e:
-                Logger.error(f"File processing failed for document '{document.title}': {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"文件处理失败: {str(e)}"
-                )
 
         self.db.add(db_document)
         await self.db.commit()
@@ -167,6 +168,14 @@ class DocumentService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="文档不存在"
+            )
+
+        # 检查文档类型
+        if document.doc_type and document.doc_type != DocumentType.TEXT:
+            Logger.error(f"Document update failed: Unsupported document type {document.doc_type}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="目前仅支持文本类型文档"
             )
 
         # 更新文档字段
