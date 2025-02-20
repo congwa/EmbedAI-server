@@ -1,12 +1,13 @@
 import crontab
 from huey import RedisHuey
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.knowledge_base import KnowledgeBase, TrainingStatus
 from app.models.document import Document
 from app.utils.session import SessionManager
 from app.models.database import AsyncSessionLocal
 from sqlalchemy import select
+from app.core.logger import Logger
 
 # 修改为从huey导入crontab
 from huey import crontab
@@ -29,6 +30,7 @@ def train_knowledge_base(kb_id: int):
         kb_id (int): 知识库ID
     """
     async def _train():
+        Logger.info(f"Starting async training task for knowledge base {kb_id}")
         async with AsyncSessionLocal() as db:
             try:
                 # 获取知识库
@@ -37,6 +39,7 @@ def train_knowledge_base(kb_id: int):
                 )).scalar_one_or_none()
                 
                 if not kb:
+                    Logger.error(f"Training task failed: Knowledge base {kb_id} not found")
                     return
 
                 # 获取知识库的所有未删除文档
@@ -48,15 +51,17 @@ def train_knowledge_base(kb_id: int):
                 )).scalars().all()
 
                 if not documents:
+                    Logger.error(f"Training task failed: No documents available for knowledge base {kb_id}")
                     kb.training_status = TrainingStatus.FAILED
-                    kb.training_error = "No documents available for training"
+                    kb.training_error = "没有可用于训练的文档"
                     await db.commit()
                     return
+
+                Logger.info(f"Processing {len(documents)} documents for knowledge base {kb_id}")
 
                 try:
                     # 获取会话并开始训练
                     session_manager = SessionManager()
-                    # 使用同步方式获取会话
                     session = session_manager.get_session_sync(
                         str(kb_id),
                         kb.llm_config
@@ -70,29 +75,46 @@ def train_knowledge_base(kb_id: int):
                     
                     # 准备文档内容和元数据
                     doc_contents = [doc.content for doc in documents]
-                    doc_metadata = [doc.metadata for doc in documents] if hasattr(Document, 'metadata') else None
+                    doc_metadata = [{"id": doc.id, "title": doc.title} for doc in documents]
+                    
+                    Logger.info(f"Starting training process for knowledge base {kb_id}")
+                    
+                    # 设置训练超时时间（默认30分钟）
+                    timeout = datetime.now() + timedelta(minutes=30)
                     
                     # 使用同步方式处理所有文档
-                    # TODO: 训练的结果处理逻辑
                     entity_count, relation_count, chunk_count = session.train_sync(
                         documents=doc_contents,
                         metadata=doc_metadata
                     )
                     
+                    # 检查是否超时
+                    if datetime.now() > timeout:
+                        raise TimeoutError("训练任务超时")
+                    
                     # 训练完成后更新状态
                     kb.training_status = TrainingStatus.TRAINED
                     kb.training_finished_at = datetime.now()
                     kb.training_error = None
+                    
+                    Logger.info(f"Training completed for knowledge base {kb_id}: {entity_count} entities, {relation_count} relations, {chunk_count} chunks")
 
+                except TimeoutError as e:
+                    Logger.error(f"Training task timeout for knowledge base {kb_id}")
+                    kb.training_status = TrainingStatus.FAILED
+                    kb.training_error = "训练任务超时"
+                    
                 except Exception as e:
                     # 训练失败时更新状态
+                    Logger.error(f"Training task failed for knowledge base {kb_id}: {str(e)}")
                     kb.training_status = TrainingStatus.FAILED
-                    kb.training_error = str(e)
+                    kb.training_error = f"训练失败: {str(e)}"
 
                 finally:
                     await db.commit()
 
             except Exception as e:
+                Logger.error(f"Unexpected error during training task for knowledge base {kb_id}: {str(e)}")
                 await db.rollback()
                 raise e
 
@@ -103,6 +125,7 @@ def train_knowledge_base(kb_id: int):
 def check_queued_knowledge_bases():
     """定期检查排队中的知识库，并启动训练"""
     async def _check():
+        Logger.debug("Checking queued knowledge bases")
         async with AsyncSessionLocal() as db:
             try:
                 # 检查是否有正在训练的知识库
@@ -121,6 +144,7 @@ def check_queued_knowledge_bases():
                     )).scalar_one_or_none()
 
                     if queued_kb:
+                        Logger.info(f"Starting training for queued knowledge base {queued_kb.id}")
                         # 更新状态为训练中
                         queued_kb.training_status = TrainingStatus.TRAINING
                         queued_kb.training_started_at = datetime.now()
@@ -132,6 +156,7 @@ def check_queued_knowledge_bases():
                         train_knowledge_base(queued_kb.id)
 
             except Exception as e:
+                Logger.error(f"Error checking queued knowledge bases: {str(e)}")
                 await db.rollback()
                 raise e
 

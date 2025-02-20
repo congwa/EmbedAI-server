@@ -144,7 +144,11 @@ class KnowledgeBaseService:
         user_id: int
     ) -> KnowledgeBase:
         """训练知识库"""
+        Logger.info(f"Starting training process for knowledge base {kb_id} requested by user {user_id}")
+        
+        # 检查权限
         if not await self.check_permission(kb_id, user_id, PermissionType.EDITOR):
+            Logger.warning(f"Training rejected: User {user_id} has no permission to train knowledge base {kb_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="没有足够的权限执行此操作"
@@ -155,7 +159,27 @@ class KnowledgeBaseService:
         )).scalar_one_or_none()
         
         if not kb:
-            raise ValueError("Knowledge base not found")
+            Logger.error(f"Training failed: Knowledge base {kb_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
+
+        # 检查知识库当前状态是否允许训练
+        if not kb.can_train:
+            Logger.warning(f"Training rejected: Knowledge base {kb_id} is in {kb.training_status} status")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"当前状态({kb.training_status})不允许训练，只有初始状态或训练失败的知识库可以训练"
+            )
+
+        # 检查是否已经在队列中
+        if kb.training_status == TrainingStatus.QUEUED:
+            Logger.warning(f"Training rejected: Knowledge base {kb_id} is already in queue")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="知识库已在训练队列中"
+            )
 
         # 获取知识库的所有未删除文档
         documents = (await self.db.execute(
@@ -166,7 +190,13 @@ class KnowledgeBaseService:
         )).scalars().all()
 
         if not documents:
-            raise ValueError("No documents available for training")
+            Logger.error(f"Training failed: No documents available for knowledge base {kb_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="没有可用于训练的文档"
+            )
+
+        Logger.info(f"Found {len(documents)} documents for training knowledge base {kb_id}")
 
         # 检查是否启用训练队列
         if settings.ENABLE_TRAINING_QUEUE:
@@ -179,6 +209,7 @@ class KnowledgeBaseService:
 
             if training_kb:
                 # 如果有其他知识库在训练，将当前知识库设置为排队状态
+                Logger.info(f"Another knowledge base is training, queuing knowledge base {kb_id}")
                 kb.training_status = TrainingStatus.QUEUED
                 kb.queued_at = datetime.now()
                 kb.training_error = None  # 清除之前的错误信息
@@ -187,6 +218,7 @@ class KnowledgeBaseService:
                 return kb
 
         # 如果没有其他知识库在训练，直接开始训练
+        Logger.info(f"Starting immediate training for knowledge base {kb_id}")
         kb.training_status = TrainingStatus.TRAINING
         kb.training_started_at = datetime.now()
         kb.training_error = None
@@ -194,9 +226,22 @@ class KnowledgeBaseService:
         await self.db.commit()
         await self.db.refresh(kb)
 
-        # 启动异步训练任务
-        from app.utils.tasks import train_knowledge_base
-        train_knowledge_base(kb_id)
+        try:
+            # 启动异步训练任务
+            from app.utils.tasks import train_knowledge_base
+            train_knowledge_base(kb_id)
+            Logger.info(f"Training task scheduled successfully for knowledge base {kb_id}")
+        except Exception as e:
+            Logger.error(f"Failed to schedule training task for knowledge base {kb_id}: {str(e)}")
+            # 如果任务调度失败，更新知识库状态
+            kb.training_status = TrainingStatus.FAILED
+            kb.training_error = f"训练任务调度失败: {str(e)}"
+            await self.db.commit()
+            await self.db.refresh(kb)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="训练任务启动失败"
+            )
 
         return kb
 
