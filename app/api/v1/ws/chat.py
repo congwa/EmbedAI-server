@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.auth import get_current_user, get_current_admin_user
-from app.core.database import get_db
+from app.services.auth import get_current_user, get_current_admin_user
+from app.models.database import get_db
 from app.models.user import User
 from app.models.enums import ChatMode, MessageType
 from app.services.chat import ChatService

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.models.user import User
-from app.core.auth import get_current_user
+from app.services.auth import get_current_user
 from app.services.knowledge_base import KnowledgeBaseService
 from app.schemas.knowledge_base import QueryRequest, QueryResponse
 

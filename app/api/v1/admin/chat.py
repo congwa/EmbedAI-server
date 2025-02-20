@@ -8,7 +8,7 @@ from app.models.user import User
 from app.schemas.chat import Chat, ChatList, ChatMessage
 from app.core.logger import Logger
 from sqlalchemy.orm import Session
-from app.core.auth import get_current_admin_user
+from app.services.auth import get_current_admin_user
 from app.models.enums import ChatMode, MessageType
 from app.schemas.chat import (
     ChatResponse,

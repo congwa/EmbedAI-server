@@ -1,9 +1,15 @@
 {
     "cSpell.words": [
         "AILLM",
+        "backref",
         "grag",
         "ilike",
+        "mget",
         "ondelete",
-        "selectinload"
+        "selectinload",
+        "zadd",
+        "zrange",
+        "zrem",
+        "zremrangebyrank"
     ]
 }
