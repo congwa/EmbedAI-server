@@ -5,7 +5,7 @@ from app.models.database import get_db
 from app.services.chat import ChatService
 from app.services.auth import get_current_admin_user
 from app.models.user import User
-from app.schemas.chat import Chat, ChatList, ChatMessage
+from app.schemas.chat import ChatList
 from app.core.logger import Logger
 from sqlalchemy.orm import Session
 from app.services.auth import get_current_admin_user

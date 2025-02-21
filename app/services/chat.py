@@ -1,20 +1,17 @@
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy import select, and_, or_, desc
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
 from fastapi import HTTPException, status, WebSocket
 from app.models.chat import Chat, ChatMessage, MessageType
-from app.models.knowledge_base import KnowledgeBase, PermissionType
 from app.models.third_party_user import ThirdPartyUser
 from app.models.user import User
 from app.models.enums import ChatMode
-from app.schemas.chat import ChatCreate, ChatMessageCreate, ChatUpdate
 from app.services.knowledge_base import KnowledgeBaseService
 from app.core.logger import Logger
 from app.core.redis_manager import redis_manager
 from app.core.ws import connection_manager
-import json
 
 class ChatManager:
     """聊天管理器，用于管理WebSocket连接"""

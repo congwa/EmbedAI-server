@@ -1,14 +1,12 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Dict, Any
 
 from app.models.database import get_db
 from app.core.ws import connection_manager
 from app.services.chat import ChatService
 from app.services.chat_ai import ChatAIService
 from app.services.session import SessionManager
-from app.schemas.chat import ChatMessageCreate
 from app.schemas.identity import UserContext, UserType
 from app.models.enums import ChatMode, MessageType
 from app.core.logger import Logger
