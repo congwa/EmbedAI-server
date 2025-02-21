@@ -1,37 +1,63 @@
-graphrag_web/
+EmbedAI-server/
 ├── app/
 │   ├── __init__.py
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── v1/
-│   │   │   ├── __init__.py
-│   │   │   ├── admin.py      # 管理员API路由
-│   │   │   └── client.py     # 客户端API路由
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── admin/
+│   │       │   ├── __init__.py
+│   │       │   ├── admin.py     # 管理员用户管理
+│   │       │   ├── auth.py      # 管理员认证
+│   │       │   ├── document.py  # 文档管理
+│   │       │   └── knowledge_base.py  # 知识库管理
+│   │       ├── client/
+│   │       │   ├── __init__.py
+│   │       │   └── client.py    # 客户端API
+│   │       └── ws/              # WebSocket模块
+│   │           ├── __init__.py
+│   │           └── chat.py      # 聊天WebSocket处理
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── config.py         # 配置管理
-│   │   ├── security.py       # 安全相关
-│   │   └── exceptions.py     # 自定义异常
+│   │   ├── config.py           # 配置管理
+│   │   ├── decorators.py       # 装饰器
+│   │   ├── exceptions.py       # 自定义异常
+│   │   ├── middleware.py       # 中间件
+│   │   ├── response.py         # 响应封装
+│   │   └── security.py         # 安全相关
+│   ├── migrations/             # 数据库迁移
+│   │   └── versions/
 │   ├── models/
 │   │   ├── __init__.py
-│   │   ├── database.py       # 数据库配置
-│   │   ├── user.py          # 用户模型
-│   │   └── knowledge_base.py # 知识库模型
+│   │   ├── database.py         # 数据库配置
+│   │   ├── document.py         # 文档模型
+│   │   ├── knowledge_base.py   # 知识库模型
+│   │   └── user.py            # 用户模型
 │   ├── schemas/
 │   │   ├── __init__.py
-│   │   ├── user.py          # 用户相关的Pydantic模型
-│   │   └── knowledge_base.py # 知识库相关的Pydantic模型
+│   │   ├── document.py         # 文档Schema
+│   │   ├── knowledge_base.py   # 知识库Schema
+│   │   └── user.py            # 用户Schema
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── auth.py          # 认证服务
-│   │   ├── user.py          # 用户服务
-│   │   └── knowledge_base.py # 知识库服务
+│   │   ├── auth.py            # 认证服务
+│   │   ├── document.py        # 文档服务
+│   │   ├── knowledge_base.py  # 知识库服务
+│   │   └── user.py            # 用户服务
 │   └── utils/
 │       ├── __init__.py
-│       └── session.py        # 会话管理工具
+│       └── logger.py          # 日志工具
+├── logs/                      # 日志目录
 ├── tests/
-│   └── __init__.py
-├── alembic/                  # 数据库迁移
-├── .env                      # 环境变量
-├── requirements.txt          # 项目依赖
-└── main.py                   # 应用入口 
+│   ├── __init__.py
+│   ├── conftest.py           # 测试配置
+│   ├── postman/              # Postman 测试集合
+│   ├── states/               # 测试状态
+│   └── utils/                # 测试工具
+├── .gitignore
+├── .python-version
+├── alembic.ini               # Alembic配置
+├── main.py                   # 应用入口
+├── pyproject.toml           # Poetry项目配置
+├── pytest.ini               # Pytest配置
+└── README.md
