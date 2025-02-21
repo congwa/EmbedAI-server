@@ -3,6 +3,7 @@
 ## 测试环境准备
 
 1. 确保已安装所需依赖：
+
 ```bash
 pip install pytest pytest-asyncio
 ```
@@ -38,18 +39,6 @@ pytest tests/test_knowledge_base_flow.py -v
 # 查看测试状态
 python -c "import json; print(json.load(open('tests/states/knowledge_base_flow.json')))"
 
-# 重置测试状态（三种方式）
-# 方式1：删除状态文件
-rm -f tests/states/knowledge_base_flow.json
-
-# 方式2：使用 Python API
-python -c "from tests.utils.test_state import TestState; TestState('knowledge_base_flow').reset()"
-
-# 方式3：使用命令行参数
-pytest tests/test_knowledge_base_flow.py -v --reset-state
-
-# 运行单个测试用例
-pytest tests/test_knowledge_base_flow.py::test_create_admin -v
 ```
 
 ### 4. 调试说明
@@ -63,6 +52,7 @@ pytest tests/test_knowledge_base_flow.py::test_create_admin -v
    - 管理员接口：`/api/v1/admin/...`
    - 普通接口：`/api/v1/...`
    - 认证接口：`/api/v1/auth/...`
+   - 客户端接口：`/api/v1/client/...`
 
 3. **常见问题解决**：
    - 401错误：检查token是否正确、是否过期
@@ -71,29 +61,60 @@ pytest tests/test_knowledge_base_flow.py::test_create_admin -v
 
 ## 测试流程说明
 
-### 1. 基础测试流程
+### 1. 知识库管理测试流程
 
-测试用例按以下顺序执行：
-
-1. 管理员相关：
+1. 用户认证流程：
    - 创建管理员账户
    - 管理员登录认证
-   - 获取管理员信息
-
-2. 用户管理：
    - 创建普通用户
    - 普通用户登录
-   - 用户信息验证
 
-3. 知识库操作：
+2. 知识库操作：
    - 创建知识库
    - 配置知识库权限
-   - 添加用户到知识库
-   - 上传和管理文档
-   - 知识库训练
-   - 知识库查询测试
+   - 添加成员到知识库
+   - 更新成员权限
+   - 测试成员访问权限
+   - 移除知识库成员
 
-### 2. 状态管理机制
+### 2. 文档管理测试流程
+
+1. 文档基础操作：
+   - 创建文档：上传文本内容
+   - 更新文档：修改标题和内容
+   - 获取文档：验证更新结果
+   - 获取文档列表：分页查询
+   - 软删除文档：保留数据但标记删除
+
+### 3. WebSocket聊天测试流程
+
+1. 聊天会话管理：
+   - 创建聊天会话
+   - 建立WebSocket连接
+   - 发送心跳消息
+   - 发送聊天消息
+   - 接收消息广播
+   - 接收AI回复
+
+2. 管理员聊天功能：
+   - 管理员WebSocket连接
+   - 发送管理员消息
+   - 接收消息广播
+
+### 4. 第三方用户接口测试流程
+
+1. 用户管理：
+   - 创建第三方用户
+   - 获取用户信息
+   - 获取用户列表
+   - 更新用户信息
+
+2. 客户端API访问：
+   - 获取知识库列表
+   - 创建聊天会话
+   - 验证访问权限
+
+### 5. 状态管理机制
 
 - **状态保存位置**：
   - 测试状态文件保存在 `tests/states/` 目录
