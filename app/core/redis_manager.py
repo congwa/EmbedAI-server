@@ -163,7 +163,7 @@ class RedisManager:
         """
         redis = await cls.get_redis()
         key = f"chat:{chat_id}:messages"
-        score = datetime.fromisoformat(message_data["created_at"]).timestamp()
+        score = datetime.timestamp(message_data["created_at"])
         
         # 添加消息到有序集合
         await redis.zadd(key, {json.dumps(message_data): score})

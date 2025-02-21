@@ -62,7 +62,7 @@ def train_knowledge_base(kb_id: int):
                 try:
                     # 获取会话并开始训练
                     session_manager = SessionManager(db)
-                    session = session_manager.get_session(str(kb_id), kb.llm_config)
+                    grag = session_manager.get_session(str(kb_id), kb.llm_config)
                     
                     # 更新训练状态
                     kb.training_status = TrainingStatus.TRAINING
@@ -80,7 +80,7 @@ def train_knowledge_base(kb_id: int):
                     timeout = datetime.now() + timedelta(minutes=30)
                     
                     # 使用同步方式处理所有文档
-                    entity_count, relation_count, chunk_count = await session.grag.async_insert(
+                    entity_count, relation_count, chunk_count = await grag.async_insert(
                         content=doc_contents,
                         metadata=doc_metadata,
                         show_progress=True

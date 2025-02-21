@@ -59,9 +59,9 @@ class ConnectionManager:
             chat_id=chat_id,
             client_id=client_id,
             connection_info={
-                "connected_at": datetime.now().isoformat(),
+                "connected_at": datetime.now(),
                 "is_admin": is_admin,
-                "last_heartbeat": datetime.now().isoformat()
+                "last_heartbeat": datetime.now()
             }
         )
         
@@ -182,9 +182,9 @@ class WSConnection:
                     chat_id=chat_id,
                     client_id=self.client_id,
                     connection_info={
-                        "connected_at": self.last_heartbeat.isoformat(),
+                        "connected_at": self.last_heartbeat,
                         "is_admin": self.is_admin,
-                        "last_heartbeat": self.last_heartbeat.isoformat()
+                        "last_heartbeat": self.last_heartbeat
                     }
                 )
         except Exception as e:

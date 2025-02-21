@@ -4,6 +4,8 @@
         "backref",
         "grag",
         "ilike",
+        "levelname",
+        "lpush",
         "mget",
         "ondelete",
         "selectinload",

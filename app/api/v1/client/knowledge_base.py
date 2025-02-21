@@ -1,31 +1,57 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from app.models.database import get_db
-from app.models.user import User
-from app.services.auth import get_current_user
 from app.services.knowledge_base import KnowledgeBaseService
+from app.services.session import SessionManager
 from app.schemas.knowledge_base import QueryRequest, QueryResponse
+from app.schemas.identity import UserContext, UserType
+from app.core.logger import Logger
 
 router = APIRouter()
 
-@router.post("/query/{kb_id}", response_model=QueryResponse)
+@router.post("/{kb_id}/query", response_model=QueryResponse)
 async def query_knowledge_base(
     kb_id: int,
-    query_request: QueryRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    request: QueryRequest,
+    client_id: str,
+    third_party_user_id: int,
+    db: Session = Depends(get_db)
 ):
-    """查询知识库
-
-    Args:
-        kb_id (int): 知识库ID
-        query_request (QueryRequest): 查询请求
-        current_user (User): 当前用户
-        db (AsyncSession): 数据库会话
-
-    Returns:
-        QueryResponse: 查询结果
-    """
-    kb_service = KnowledgeBaseService(db)
-    result = await kb_service.query(kb_id, current_user.id, query_request.query, query_request.top_k)
-    return result 
+    """第三方用户查询知识库"""
+    try:
+        # 创建用户上下文
+        session_manager = SessionManager(db)
+        identity = await session_manager.create_or_update_identity(
+            client_id=client_id,
+            third_party_user_id=third_party_user_id
+        )
+        
+        user_context = UserContext(
+            user_type=UserType.THIRD_PARTY,
+            user_id=third_party_user_id,
+            client_id=client_id,
+            identity_id=identity.id
+        )
+        
+        # 执行查询
+        kb_service = KnowledgeBaseService(db)
+        result = await kb_service.query(
+            kb_id=kb_id,
+            user_context=user_context,
+            query=request.query,
+            top_k=request.top_k
+        )
+        
+        return QueryResponse(
+            query=result["query"],
+            results=result["results"],
+            metadata=result["metadata"]
+        )
+        
+    except Exception as e:
+        Logger.error(f"Query failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"查询失败: {str(e)}"
+        ) 

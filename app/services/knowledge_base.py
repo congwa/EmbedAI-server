@@ -24,6 +24,8 @@ from app.utils.rate_limit import rate_limit
 from app.core.config import settings
 from sqlalchemy.sql import select
 from app.core.logger import Logger
+from app.schemas.identity import UserContext, UserType
+from app.models.identity import UserIdentity
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
@@ -252,25 +254,53 @@ class KnowledgeBaseService:
     async def query(
         self,
         kb_id: int,
-        user_id: int,
+        user_context: UserContext,
         query: str,
-        top_k: int = 5
+        top_k: int = 5,
+        skip_permission_check: bool = False
     ) -> dict:
-        """查询知识库"""
-        Logger.info(f"Processing query request for knowledge base {kb_id} from user {user_id}")
+        """查询知识库
         
-        # 检查权限
-        if not await self.check_permission(kb_id, user_id, PermissionType.VIEWER):
-            Logger.warning(f"Query rejected: User {user_id} has no permission to query knowledge base {kb_id}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="没有足够的权限执行此操作"
-            )
+        Args:
+            kb_id: 知识库ID
+            user_context: 用户上下文信息
+            query: 查询内容
+            top_k: 返回结果数量
+            skip_permission_check: 是否跳过权限检查
             
+        Returns:
+            dict: 查询结果
+            
+        Raises:
+            HTTPException: 当权限不足或知识库不存在时
+        """
+        Logger.info(
+            f"Processing query request for knowledge base {kb_id} "
+            f"from {user_context.user_type} user {user_context.user_id}"
+        )
+
+        # 检查权限（仅当 skip_permission_check 为 False 时）
+        if not skip_permission_check:
+            has_permission = await self.check_kb_permission(
+                kb_id=kb_id,
+                identity_id=user_context.identity_id,
+                required_permission=PermissionType.VIEWER
+            )
+            if not has_permission:
+                Logger.warning(
+                    f"Query rejected: {user_context.user_type} user {user_context.user_id} "
+                    f"has no permission to query knowledge base {kb_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="没有足够的权限执行此操作"
+                )
+
+        # 获取知识库
         kb = (await self.db.execute(
             select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
         )).scalar_one_or_none()
-        
+
         if not kb:
             Logger.error(f"Query failed: Knowledge base {kb_id} not found")
             raise HTTPException(
@@ -279,27 +309,56 @@ class KnowledgeBaseService:
             )
 
         if kb.training_status != TrainingStatus.TRAINED:
-            Logger.warning(f"Query rejected: Knowledge base {kb_id} not trained yet (status: {kb.training_status})")
+            Logger.warning(
+                f"Query rejected: Knowledge base {kb_id} not trained yet "
+                f"(status: {kb.training_status})"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="知识库尚未训练完成"
             )
 
-        # 获取会话
         try:
-            session = self.session_manager.get_session(str(kb_id), kb.llm_config)
-            result = await session.grag.async_query(query, top_k=top_k)
+            # 获取会话
+            grag = self.session_manager.get_session(str(kb_id), kb.llm_config)
+            result = await grag.async_query(query, top_k=top_k)
+            
             Logger.info(f"Query successful for knowledge base {kb_id}: '{query[:100]}...' (if longer)")
+
+            # 构建元数据
+            metadata = {
+                "kb_id": kb_id,
+                "top_k": top_k,
+                "user_type": user_context.user_type,
+                "user_id": user_context.user_id
+            }
+
+            # 记录审计日志
+            await self.audit_manager.log_query(
+                user_context=user_context,
+                kb_id=kb_id,
+                query=query,
+                status="success"
+            )
+
             return {
                 "query": query,
                 "results": result,
-                "metadata": {
-                    "kb_id": kb_id,
-                    "top_k": top_k
-                }
+                "metadata": metadata
             }
+
         except Exception as e:
             Logger.error(f"Query failed for knowledge base {kb_id}: {str(e)}")
+            
+            # 记录错误审计
+            await self.audit_manager.log_query(
+                user_context=user_context,
+                kb_id=kb_id,
+                query=query,
+                status="error",
+                error=str(e)
+            )
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"查询执行失败: {str(e)}"
@@ -729,3 +788,83 @@ class KnowledgeBaseService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
             )
+
+    async def check_kb_permission(
+        self,
+        kb_id: int,
+        identity_id: Optional[int],
+        required_permission: PermissionType
+    ) -> bool:
+        """检查用户对知识库的权限
+        
+        Args:
+            kb_id: 知识库ID
+            identity_id: 用户身份ID
+            required_permission: 所需权限级别
+            
+        Returns:
+            bool: 是否有权限
+        """
+        if not identity_id:
+            Logger.warning(f"Permission check failed: No identity provided for knowledge base {kb_id}")
+            return False
+            
+        # 获取用户身份信息
+        identity = (await self.db.execute(
+            select(UserIdentity).filter(UserIdentity.id == identity_id)
+        )).scalar_one_or_none()
+        
+        if not identity:
+            Logger.warning(f"Permission check failed: Identity {identity_id} not found")
+            return False
+            
+        # 检查官方用户权限
+        if identity.official_user_id:
+            user = (await self.db.execute(
+                select(User).filter(User.id == identity.official_user_id)
+            )).scalar_one_or_none()
+            
+            # 管理员拥有所有权限
+            if user and user.is_admin:
+                Logger.debug(f"Admin user {user.email} granted all permissions for knowledge base {kb_id}")
+                return True
+                
+            # 检查知识库权限
+            permission = (await self.db.execute(
+                select(knowledge_base_users).filter(
+                    and_(
+                        knowledge_base_users.c.knowledge_base_id == kb_id,
+                        knowledge_base_users.c.user_id == identity.official_user_id
+                    )
+                )
+            )).first()
+            
+            if permission:
+                has_permission = PermissionType.check_permission_level(
+                    permission.permission,
+                    required_permission
+                )
+                if has_permission:
+                    Logger.debug(
+                        f"Permission check passed: Official user {identity.official_user_id} "
+                        f"has sufficient permission ({permission.permission}) "
+                        f"for required level ({required_permission}) on knowledge base {kb_id}"
+                    )
+                else:
+                    Logger.warning(
+                        f"Permission check failed: Official user {identity.official_user_id} "
+                        f"has insufficient permission level ({permission.permission}) "
+                        f"for required level ({required_permission}) on knowledge base {kb_id}"
+                    )
+                return has_permission
+                
+        # 检查第三方用户权限
+        if identity.third_party_user_id:
+            # 第三方用户对自己的知识库有查看权限
+            return True
+                    
+        Logger.warning(
+            f"Permission check failed: Identity {identity_id} "
+            f"has no permission for knowledge base {kb_id}"
+        )
+        return False

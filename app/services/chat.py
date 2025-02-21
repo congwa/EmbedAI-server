@@ -68,8 +68,8 @@ class ChatService:
                 "third_party_user_id": chat.third_party_user_id,
                 "knowledge_base_id": chat.knowledge_base_id,
                 "current_admin_id": chat.current_admin_id or 0,
-                "last_message_at": chat.last_message_at.isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "last_message_at": chat.last_message_at,
+                "updated_at": datetime.now()
             }
         )
         
@@ -85,7 +85,7 @@ class ChatService:
                 "id": message.id,
                 "content": message.content,
                 "message_type": message.message_type,
-                "created_at": message.created_at.isoformat(),
+                "created_at": message.created_at,
                 "is_read": message.is_read,
                 "sender_id": message.sender_id or 0,
                 "metadata": message.metadata or {}
@@ -173,9 +173,9 @@ class ChatService:
             chat = Chat()
             for key, value in cached.items():
                 if key == "last_message_at":
-                    value = datetime.fromisoformat(value)
+                    value = datetime.fromtimestamp(value)
                 elif key == "updated_at":
-                    value = datetime.fromisoformat(value)
+                    value = datetime.fromtimestamp(value)
                 setattr(chat, key, value)
             return chat
             
@@ -356,7 +356,7 @@ class ChatService:
                     "id": message.id,
                     "content": message.content,
                     "message_type": message.message_type,
-                    "created_at": message.created_at.isoformat(),
+                    "created_at": message.created_at,
                     "sender_id": message.sender_id,
                     "metadata": message.metadata
                 }
@@ -663,7 +663,7 @@ class ChatService:
                         if key == "is_read":
                             value = bool(value)
                         elif key == "created_at":
-                            value = datetime.fromisoformat(value)
+                            value = datetime.fromtimestamp(value)
                         setattr(message, key, value)
                     messages.append(message)
                 return messages, len(cached_messages)
