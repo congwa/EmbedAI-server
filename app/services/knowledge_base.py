@@ -286,14 +286,9 @@ class KnowledgeBaseService:
             )
 
         # 获取会话
-        session = self.session_manager.get_session_sync(
-            str(kb_id),
-            kb.llm_config
-        )
-
-        # 执行查询
         try:
-            result = session.query(query, top_k=top_k)
+            session = self.session_manager.get_session(str(kb_id), kb.llm_config)
+            result = await session.grag.async_query(query, top_k=top_k)
             Logger.info(f"Query successful for knowledge base {kb_id}: '{query[:100]}...' (if longer)")
             return {
                 "query": query,
