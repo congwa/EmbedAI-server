@@ -4,6 +4,7 @@
         "backref",
         "grag",
         "ilike",
+        "langchain",
         "levelname",
         "lpush",
         "mget",
