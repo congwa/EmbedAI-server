@@ -40,7 +40,7 @@ def pytest_configure(config):
     logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
     logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
     logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
-    logging.getLogger('fastapi').setLevel(logging.WARNING)
+    logging.getLogger('EmbedAi-Server').setLevel(logging.WARNING)
     
     # 忽略特定警告
     warnings.filterwarnings("ignore", category=DeprecationWarning)
