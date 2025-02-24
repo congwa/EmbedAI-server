@@ -68,7 +68,16 @@ async def get_documents(
         start_time=start_time,
         end_time=end_time
     )
-    return APIResponse.success(data=docs)
+    
+    # 将Document对象转换为DocumentResponse
+    pagination_data = {
+        "total": docs["total"],
+        "page": skip // limit + 1,
+        "page_size": limit,
+        "items": [DocumentResponse.model_validate(doc) for doc in docs["items"]]
+    }
+    
+    return APIResponse.success(data=DocumentPagination.model_validate(pagination_data))
 
 @router.put("/documents/{doc_id}")
 async def update_document(
@@ -104,8 +113,28 @@ async def delete_document(
         db (Session): 数据库会话
 
     Returns:
-        APIResponse: 统一响应格式，包含被删除的文档信息
+        APIResponse: 统一响应格式
     """
     document_service = DocumentService(db)
-    doc = await document_service.delete(doc_id)
+    await document_service.delete(doc_id)
+    return APIResponse.success(data={"message": "文档已删除"})
+
+@router.get("/documents/{doc_id}")
+async def get_document(
+    doc_id: int = Path(..., description="文档ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取单个文档详情
+
+    Args:
+        doc_id (int): 文档ID
+        current_user (User): 当前用户
+        db (Session): 数据库会话
+
+    Returns:
+        APIResponse: 统一响应格式，包含文档详情
+    """
+    document_service = DocumentService(db)
+    doc = await document_service.get(doc_id)
     return APIResponse.success(data=DocumentResponse.model_validate(doc))

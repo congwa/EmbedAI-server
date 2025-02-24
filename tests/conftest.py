@@ -84,8 +84,8 @@ async def setup_database(state, reset_state):
     # 如果指定了重置状态或者是新的测试运行，重置数据库和状态
     if reset_state or not state.step_completed("setup_database"):
         async with engine.begin() as conn:
-            await conn.run_sync(Base.doc_metadata.drop_all)
-            await conn.run_sync(Base.doc_metadata.create_all)
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
         state.reset()
     
     yield

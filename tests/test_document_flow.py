@@ -1,9 +1,20 @@
 import pytest
-from typing import Generator
+from typing import Generator, AsyncGenerator
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from main import app
+from app.models.database import AsyncSessionLocal, engine, Base
 from .utils.test_state import TestState
 from .utils.decorators import step_decorator
-from main import app
+from .test_knowledge_base_flow import (
+    step_create_admin,
+    step_admin_login,
+    step_create_normal_user,
+    step_user_login,
+    step_create_knowledge_base,
+    setup_database
+)
+import pytest_asyncio
 
 @pytest.fixture(scope="session")
 def state() -> Generator[TestState, None, None]:
@@ -15,6 +26,23 @@ def client() -> Generator[TestClient, None, None]:
     """测试客户端"""
     yield TestClient(app)
 
+@pytest_asyncio.fixture(autouse=True)
+async def setup_test_data(state: TestState, client: TestClient) -> AsyncGenerator[None, None]:
+    """设置测试数据"""
+    # 重用knowledge_base_flow中的数据库设置
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    state.reset()
+    
+    # 创建必要的测试数据
+    await step_create_admin(state, client)
+    await step_admin_login(state, client)
+    await step_create_normal_user(state, client)
+    await step_user_login(state, client)
+    await step_create_knowledge_base(state, client)
+    yield
+
 @step_decorator("create_document")
 async def step_create_document(state: TestState, client: TestClient):
     """创建文档"""
@@ -22,11 +50,10 @@ async def step_create_document(state: TestState, client: TestClient):
     kb_id = state.get_step_data("kb_id")
     
     response = client.post(
-        "/api/v1/admin/documents",
+        f"/api/v1/admin/knowledge-bases/{kb_id}/documents",
         json={
             "title": "测试文档",
             "content": "这是一个测试文档的内容",
-            "knowledge_base_id": kb_id,
             "doc_type": "text"
         },
         headers={"Authorization": f"Bearer {user_token}"}
@@ -73,8 +100,8 @@ async def step_list_documents(state: TestState, client: TestClient):
     kb_id = state.get_step_data("kb_id")
     
     response = client.get(
-        "/api/v1/admin/documents",
-        params={"knowledge_base_id": kb_id, "page": 1, "size": 10},
+        f"/api/v1/admin/knowledge-bases/{kb_id}/documents",
+        params={"skip": 0, "limit": 10},
         headers={"Authorization": f"Bearer {user_token}"}
     )
     assert response.status_code == 200
@@ -94,76 +121,9 @@ async def step_soft_delete_document(state: TestState, client: TestClient):
     assert response.status_code == 200
     return response.json()
 
-@step_decorator("create_admin")
-async def step_create_admin(state: TestState, client: TestClient):
-    """创建管理员账户"""
-    response = client.post(
-        "/api/v1/admin/register",
-        json={
-            "email": "admin@example.com",
-            "password": "admin123",
-            "register_code": "123456"
-        }
-    )
-    assert response.status_code == 200
-    response_data = response.json()
-    state.save_step_data("admin_id", response_data["data"]["id"])
-    state.save_step_data("admin_email", response_data["data"]["email"])
-    return response_data
-
-@step_decorator("admin_login")
-async def step_admin_login(state: TestState, client: TestClient):
-    """管理员登录"""
-    response = client.post(
-        "/api/v1/admin/login",
-        json={
-            "email": "admin@example.com",
-            "password": "admin123"
-        }
-    )
-    assert response.status_code == 200
-    state.save_step_data("admin_token", response.json()["data"]["access_token"])
-
-@step_decorator("create_normal_user")
-async def step_create_normal_user(state: TestState, client: TestClient):
-    """创建普通用户"""
-    admin_token = state.get_step_data("admin_token")
-    response = client.post(
-        "/api/v1/admin/users",
-        json={
-            "email": "user@example.com",
-            "password": "user123",
-            "is_admin": False
-        },
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200
-    state.save_step_data("user_id", response.json()["data"]["id"])
-
-@step_decorator("user_login")
-async def step_user_login(state: TestState, client: TestClient):
-    """普通用户登录"""
-    response = client.post(
-        "/api/v1/admin/login",
-        json={
-            "email": "user@example.com",
-            "password": "user123"
-        }
-    )
-    assert response.status_code == 200
-    state.save_step_data("user_token", response.json()["data"]["access_token"])
-
 @pytest.mark.asyncio
 async def test_document_flow(state: TestState, client: TestClient):
     """测试文档管理流程"""
-    # 创建并登录管理员
-    await step_create_admin(state, client)
-    await step_admin_login(state, client)
-    
-    # 创建并登录普通用户
-    await step_create_normal_user(state, client)
-    await step_user_login(state, client)
-    
     # 创建文档
     await step_create_document(state, client)
     
