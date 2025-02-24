@@ -242,51 +242,51 @@ class KnowledgeBaseService:
         Raises:
             HTTPException: 当权限不足或知识库不存在时
         """
-        Logger.info(
-            f"Processing query request for knowledge base {kb_id} "
-            f"from {user_context.user_type} user {user_context.user_id}"
-        )
-
-        # 检查权限（仅当 skip_permission_check 为 False 时）
-        if not skip_permission_check:
-            has_permission = await self.check_kb_permission(
-                kb_id=kb_id,
-                identity_id=user_context.identity_id,
-                required_permission=PermissionType.VIEWER
+        try:
+            Logger.info(
+                f"Processing query request for knowledge base {kb_id} "
+                f"from {user_context.user_type} user {user_context.user_id}"
             )
-            if not has_permission:
+
+            # 检查权限（仅当 skip_permission_check 为 False 时）
+            if not skip_permission_check:
+                has_permission = await self.check_kb_permission(
+                    kb_id=kb_id,
+                    identity_id=user_context.identity_id,
+                    required_permission=PermissionType.VIEWER
+                )
+                if not has_permission:
+                    Logger.warning(
+                        f"Query rejected: {user_context.user_type} user {user_context.user_id} "
+                        f"has no permission to query knowledge base {kb_id}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="没有足够的权限执行此操作"
+                    )
+
+            # 获取知识库
+            kb = (await self.db.execute(
+                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+            )).scalar_one_or_none()
+
+            if not kb:
+                Logger.error(f"Query failed: Knowledge base {kb_id} not found")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="知识库不存在"
+                )
+
+            if kb.training_status != TrainingStatus.TRAINED:
                 Logger.warning(
-                    f"Query rejected: {user_context.user_type} user {user_context.user_id} "
-                    f"has no permission to query knowledge base {kb_id}"
+                    f"Query rejected: Knowledge base {kb_id} not trained yet "
+                    f"(status: {kb.training_status})"
                 )
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="没有足够的权限执行此操作"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="知识库尚未训练完成"
                 )
 
-        # 获取知识库
-        kb = (await self.db.execute(
-            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
-        )).scalar_one_or_none()
-
-        if not kb:
-            Logger.error(f"Query failed: Knowledge base {kb_id} not found")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="知识库不存在"
-            )
-
-        if kb.training_status != TrainingStatus.TRAINED:
-            Logger.warning(
-                f"Query rejected: Knowledge base {kb_id} not trained yet "
-                f"(status: {kb.training_status})"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="知识库尚未训练完成"
-            )
-
-        try:
             # 获取会话
             grag = self.session_manager.get_session(str(kb_id), kb.llm_config)
             result = await grag.async_query(query, top_k=top_k)
@@ -310,8 +310,17 @@ class KnowledgeBaseService:
                 "doc_metadata": doc_metadata
             }
 
+        except HTTPException:
+            # 直接抛出 HTTP 异常，因为这些是预期的错误
+            raise
         except Exception as e:
-            Logger.error(f"Query failed for knowledge base {kb_id}: {str(e)}")
+            import traceback
+            error_info = traceback.format_exc()
+            Logger.error(
+                f"Query failed for knowledge base {kb_id}\n"
+                f"Error: {str(e)}\n"
+                f"Traceback:\n{error_info}"
+            )
             
             # 记录错误审计
             await self.audit_manager.log_query(
@@ -319,7 +328,7 @@ class KnowledgeBaseService:
                 kb_id=kb_id,
                 query=query,
                 status="error",
-                error=str(e)
+                error=f"{str(e)}\n{error_info}"
             )
             
             raise HTTPException(

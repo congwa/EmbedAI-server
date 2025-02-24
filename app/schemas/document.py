@@ -40,7 +40,7 @@ class DocumentInDB(DocumentBase):
     knowledge_base_id: int = Field(..., description="所属知识库ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    created_by_id: int = Field(..., description="创建者ID")
+    created_by_id: Optional[int] = Field(None, description="创建者ID")
     is_deleted: bool = Field(False, description="是否已删除")
 
     model_config = ConfigDict(from_attributes=True)
@@ -51,7 +51,7 @@ class DocumentResponse(DocumentInDB):
     用于API响应中的文档数据
     """
     kb_id: int = Field(alias="knowledge_base_id", description="所属知识库ID")
-    user_id: int = Field(alias="created_by_id", description="创建者ID")
+    user_id: Optional[int] = Field(None, alias="created_by_id", description="创建者ID")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 

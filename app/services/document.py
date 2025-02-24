@@ -25,11 +25,15 @@ class DocumentService:
     async def create(
         self,
         document: DocumentCreate,
+        kb_id: int,
+        user_id: int
     ) -> Document:
         """创建新文档
         
         Args:
-            document (DocumentCreate): 文档创建模型，目前仅支持文本类型
+            document: 文档创建模型，目前仅支持文本类型
+            kb_id: 知识库ID
+            user_id: 用户ID
             
         Returns:
             Document: 创建的文档对象
@@ -37,7 +41,7 @@ class DocumentService:
         Raises:
             HTTPException: 当知识库不存在或文档类型不支持时抛出
         """
-        Logger.info(f"Creating new document '{document.title}' for knowledge base {document.knowledge_base_id}")
+        Logger.info(f"Creating new document '{document.title}' for knowledge base {kb_id}")
         
         # 检查文档类型
         if document.doc_type != DocumentType.TEXT:
@@ -49,11 +53,11 @@ class DocumentService:
         
         # 检查知识库是否存在
         kb = (await self.db.execute(
-            select(KnowledgeBase).filter(KnowledgeBase.id == document.knowledge_base_id)
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
         )).scalar_one_or_none()
         
         if not kb:
-            Logger.error(f"Document creation failed: Knowledge base {document.knowledge_base_id} not found")
+            Logger.error(f"Document creation failed: Knowledge base {kb_id} not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="知识库不存在"
@@ -64,7 +68,8 @@ class DocumentService:
             title=document.title,
             content=document.content,
             doc_type=DocumentType.TEXT,
-            knowledge_base_id=document.knowledge_base_id
+            knowledge_base_id=kb_id,
+            created_by_id=user_id
         )
 
         self.db.add(db_document)

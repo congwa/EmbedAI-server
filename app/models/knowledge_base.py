@@ -10,7 +10,7 @@ from sqlalchemy.sql import select, and_
 from .associations import knowledge_base_users
 from .enums import PermissionType, TrainingStatus
 from app.models.user import User
-
+from app.core.logger import Logger
 class KnowledgeBase(Base):
     """知识库模型
     
@@ -204,40 +204,50 @@ class KnowledgeBase(Base):
         Raises:
             ValueError: 当用户已是成员或没有足够权限时
         """
-        # 检查是否已是成员
-        if await self.get_member_permission(db, user_id):
-            raise ValueError("用户已是知识库成员")
+        try:
+            # 检查是否已是成员
+            if await self.get_member_permission(db, user_id):
+                raise ValueError("用户已是知识库成员")
+                
+            # 检查操作权限
+            if not await self.check_permission(db, current_user_id, PermissionType.ADMIN):
+                raise ValueError("没有足够的权限执行此操作")
+                
+            # 获取当前用户有效权限
+            current_permission = await self.get_effective_permission(db, current_user_id)
+            if not current_permission:
+                raise ValueError("没有足够的权限执行此操作")
+                
+            # 不能添加权限级别高于或等于自己的成员
+            if PermissionType.get_permission_level(permission) >= PermissionType.get_permission_level(current_permission):
+                raise ValueError("不能添加权限级别高于或等于自己的成员")
+                
+            # 检查要添加的用户是否存在
+            user = (await db.execute(
+                select(User).filter(User.id == user_id)
+            )).scalar_one_or_none()
             
-        # 检查操作权限
-        if not await self.check_permission(db, current_user_id, PermissionType.ADMIN):
-            raise ValueError("没有足够的权限执行此操作")
-            
-        # 获取当前用户有效权限
-        current_permission = await self.get_effective_permission(db, current_user_id)
-        if not current_permission:
-            raise ValueError("没有足够的权限执行此操作")
-            
-        # 不能添加权限级别高于或等于自己的成员
-        if PermissionType.get_permission_level(permission) >= PermissionType.get_permission_level(current_permission):
-            raise ValueError("不能添加权限级别高于或等于自己的成员")
-            
-        # 检查要添加的用户是否存在
-        user = await db.execute(
-            select(User).filter(User.id == user_id)
-        ).scalar_one_or_none()
-        
-        if not user:
-            raise ValueError("用户不存在")
-            
-        await db.execute(
-            knowledge_base_users.insert().values(
-                knowledge_base_id=self.id,
-                user_id=user_id,
-                permission=permission,
-                created_at=datetime.now()
+            if not user:
+                raise ValueError("用户不存在")
+                
+            await db.execute(
+                knowledge_base_users.insert().values(
+                    knowledge_base_id=self.id,
+                    user_id=user_id,
+                    permission=permission,
+                    created_at=datetime.now()
+                )
             )
-        )
-        await db.commit()
+            await db.commit()
+        except Exception as e:
+            import traceback
+            error_info = traceback.format_exc()
+            Logger.error(
+                f"Failed to add member (user_id: {user_id}) to knowledge base {self.id}\n"
+                f"Error: {str(e)}\n"
+                f"Traceback:\n{error_info}"
+            )
+            raise
         
     async def update_member_permission(
         self,

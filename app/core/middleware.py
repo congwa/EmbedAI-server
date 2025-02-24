@@ -4,6 +4,7 @@ from starlette.responses import Response
 import time
 from app.core.logger import Logger
 from app.core.response import APIResponse
+import traceback
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -25,10 +26,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             
             return response
         except Exception as e:
+            error_info = traceback.format_exc()
             # 记录错误信息
             Logger.error(
-                f"Error processing request: {request.method} {request.url} - "
-                f"Error: {str(e)}"
+                f"Error processing request: {request.method} {request.url}\n"
+                f"Error: {str(e)}\n"
+                f"Traceback:\n{error_info}"
             )
             raise
 
