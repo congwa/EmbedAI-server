@@ -111,7 +111,7 @@ async def step_create_knowledge_base(state: TestState, client: TestClient):
                     "model": "BAAI/bge-m3",
                     "base_url": "https://api.siliconflow.cn/v1",
                     "api_key": "test-api-key",
-                    "embedding_dim": 1536
+                    "embedding_dim": 1024
                 }
             }
         },

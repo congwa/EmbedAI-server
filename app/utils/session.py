@@ -58,6 +58,13 @@ class SessionManager:
             GraphRAG.Config: GraphRAG 配置对象
         """
         Logger.info(f"Creating GraphRAG config with LLM model: {llm_config.llm.model}")
+        Logger.info(f"Creating GraphRAG config with Embedding model: {llm_config.embeddings.model}")
+        Logger.info(f"Creating GraphRAG config with Embedding dim: {llm_config.embeddings.embedding_dim}")
+        Logger.info(f"Creating GraphRAG config with Embedding base_url: {llm_config.embeddings.base_url}")
+        Logger.info(f"Creating GraphRAG config with Embedding api_key: {llm_config.embeddings.api_key}")
+        Logger.info(f"Creating GraphRAG config with LLM base_url: {llm_config.llm.base_url}")
+        Logger.info(f"Creating GraphRAG config with LLM api_key: {llm_config.llm.api_key}")
+        Logger.info(f"Creating GraphRAG config with LLM model: {llm_config.llm.model}")
         return GraphRAG.Config(
             llm_service=OpenAILLMService(
                 model=llm_config.llm.model,
@@ -71,7 +78,7 @@ class SessionManager:
                 base_url=llm_config.embeddings.base_url,
                 api_key=llm_config.embeddings.api_key,
                 client="openai",
-                embedding_dim=llm_config.embeddings.embedding_dim,
+                embedding_dim=llm_config.embeddings.embedding_dim
             ),
         )
     

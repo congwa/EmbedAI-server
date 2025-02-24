@@ -9,3 +9,5 @@ migrations/versions/*.py
 _*.md
 
 tests/states/*
+
+workspaces/*

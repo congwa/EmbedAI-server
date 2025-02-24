@@ -77,6 +77,7 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
     from app.utils.session import SessionManager
     from datetime import datetime, timedelta
     from app.core.logger import Logger
+    from app.core.config import settings
     
     async with AsyncSessionLocal() as db:
         try:
@@ -103,13 +104,17 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
 
             # 获取会话并开始训练
             session_manager = SessionManager(db)
-            grag = await session_manager.get_session(str(kb_id), kb.llm_config)
+            Logger.info("Creating session manager")
+            
+            grag = await session_manager.get_session(str(kb_id), settings.DEFAULT_LLM_CONFIG)
+            Logger.info("Session created successfully")
             
             # 更新训练状态
             kb.training_status = TrainingStatus.TRAINING
             kb.training_started_at = datetime.now()
             kb.training_error = None
             await db.commit()
+            Logger.info("Training status updated")
             
             # 准备文档内容和元数据
             doc_contents = [doc.content for doc in documents]
@@ -119,20 +124,26 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
             Logger.info(f"Document contents: {doc_contents}")
             Logger.info(f"Document metadata: {doc_metadata}")
             
-            # 使用同步方式处理所有文档
-            entity_count, relation_count, chunk_count = await grag.async_insert(
-                content=doc_contents,
-                metadata=doc_metadata,
-                show_progress=True
-            )
+            try:
+                # 使用同步方式处理所有文档
+                entity_count, relation_count, chunk_count = await grag.async_insert(
+                    content=doc_contents,
+                    metadata=doc_metadata,
+                    show_progress=True
+                )
+                Logger.info(f"Training completed with {entity_count} entities, {relation_count} relations, {chunk_count} chunks")
+            except Exception as e:
+                Logger.error(f"Training failed with error: {str(e)}")
+                Logger.error(f"Error type: {type(e)}")
+                import traceback
+                Logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
             
             # 训练完成后更新状态
             kb.training_status = TrainingStatus.TRAINED
             kb.training_finished_at = datetime.now()
             kb.training_error = None
             await db.commit()
-            
-            Logger.info(f"Training completed: {entity_count} entities, {relation_count} relations, {chunk_count} chunks")
             
         except Exception as e:
             Logger.error(f"Training failed: {str(e)}")
