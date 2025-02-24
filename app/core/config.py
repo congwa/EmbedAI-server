@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     DEFAULT_API_BASE: str = "https://api.siliconflow.cn/v1"
 
     # 默认API密钥 必须在环境变量提供
-    DEFAULT_API_KEY: str = os.getenv("OPENAI_API_KEY", "your-api-key")
+    DEFAULT_API_KEY: str = os.getenv("OPENAI_API_KEY", "sk-trczwprxbdczhgqhrnevtxesrympmeawffgkdopnyofqttsg")
     DEFAULT_EMBEDDING_DIM: int = 1536
     
     # 训练配置
