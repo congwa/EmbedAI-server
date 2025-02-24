@@ -9,9 +9,61 @@ from sqlalchemy.orm import Session
 from app.models.knowledge_base import KnowledgeBase
 from app.core.logger import Logger
 from app.schemas.llm import LLMConfig
+import fast_graphrag._services._state_manager as state_manager
 
 # 定义会话类型
 SessionType = Tuple[GraphRAG, datetime]
+
+# 添加自定义进度条类
+class CustomTqdm:
+    """自定义进度条类
+    
+    用于替换 fast-graphrag 中的 tqdm 进度条
+    实现了必要的接口：__init__, __iter__, update, set_description
+    """
+    def __init__(self, iterable=None, desc=None, total=None, disable=False):
+        self.iterable = iterable
+        self.desc = desc
+        self.total = total
+        self.disable = disable
+        self.n = 0
+        
+        if desc and total:
+            Logger.info(f"Starting {desc} - Total: {total}")
+        
+    def __iter__(self):
+        if self.disable:
+            yield from self.iterable
+            return
+            
+        for item in self.iterable:
+            self.n += 1
+            if self.total:
+                percentage = (self.n / self.total) * 100
+                Logger.info(f"{self.desc}: {self.n}/{self.total} ({percentage:.1f}%)")
+            else:
+                Logger.info(f"{self.desc}: {self.n}")
+            yield item
+            
+    def update(self, n=1):
+        if self.disable:
+            return
+            
+        self.n += n
+        if self.total:
+            percentage = (self.n / self.total) * 100
+            Logger.info(f"{self.desc}: {self.n}/{self.total} ({percentage:.1f}%)")
+        else:
+            Logger.info(f"{self.desc}: {self.n}")
+        
+    def set_description(self, desc):
+        if not self.disable:
+            self.desc = desc
+            Logger.info(f"Progress: {desc}")
+            
+    def close(self):
+        if not self.disable and self.desc:
+            Logger.info(f"Completed: {self.desc}")
 
 class SessionManager:
     """会话管理器
@@ -110,13 +162,20 @@ class SessionManager:
         if not kb.working_dir:
             raise ValueError(f"Knowledge base {kb_id} has no working directory")
         
-        return GraphRAG(
+        import fast_graphrag._utils
+        fast_graphrag._utils.logger = Logger
+        state_manager.tqdm = CustomTqdm
+        # 创建 GraphRAG 实例
+        grag = GraphRAG(
             working_dir=kb.working_dir,
             domain=llm_config.domain,
             example_queries="\n".join(llm_config.example_queries or []),
             entity_types=llm_config.entity_types or [],
             config=self._create_graphrag_config(llm_config)
         )
+        
+        
+        return grag
     
     async def get_session(self, kb_id: str, llm_config: Optional[LLMConfig] = None) -> GraphRAG:
         """获取或创建会话"""
