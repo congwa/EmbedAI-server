@@ -1,7 +1,6 @@
 import crontab
 from huey import RedisHuey
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from app.models.knowledge_base import KnowledgeBase, TrainingStatus
 from app.models.document import Document
 from app.utils.session import SessionManager
@@ -24,6 +23,7 @@ huey = RedisHuey(
 
 @huey.task()
 def train_knowledge_base(kb_id: int):
+    Logger.info(f"train_knowledge_base: {kb_id}")
     """异步训练知识库任务
 
     Args:
@@ -62,6 +62,7 @@ def train_knowledge_base(kb_id: int):
                 try:
                     # 获取会话并开始训练
                     session_manager = SessionManager(db)
+                    Logger.info(f"Session manager: {kb.llm_config}")
                     grag = session_manager.get_session(str(kb_id), kb.llm_config)
                     
                     # 更新训练状态
@@ -73,6 +74,8 @@ def train_knowledge_base(kb_id: int):
                     # 准备文档内容和元数据
                     doc_contents = [doc.content for doc in documents]
                     doc_metadata = [{"id": doc.id, "title": doc.title} for doc in documents]
+                    Logger.info(f"doc_contents: {doc_contents}")
+                    Logger.info(f"doc_metadata: {doc_metadata}")
                     
                     Logger.info(f"Starting training process for knowledge base {kb_id}")
                     
@@ -117,13 +120,14 @@ def train_knowledge_base(kb_id: int):
                 raise e
 
     import asyncio
+    Logger.info(f"Starting training task for knowledge base {kb_id}")
     asyncio.run(_train())
 
 @huey.periodic_task(crontab(minute='*/1'))
 def check_queued_knowledge_bases():
     """定期检查排队中的知识库，并启动训练"""
     async def _check():
-        Logger.debug("Checking queued knowledge bases")
+        Logger.info("Checking queued knowledge bases")
         async with AsyncSessionLocal() as db:
             try:
                 # 检查是否有正在训练的知识库
@@ -134,8 +138,10 @@ def check_queued_knowledge_bases():
                 )).scalar_one_or_none()
 
                 if not training_kb:
+                    Logger.info("No training knowledge base found")
                     # 获取下一个待训练的知识库ID
                     next_kb_id = await redis_manager.get_next_training_task()
+                    Logger.info(f"Next training knowledge base ID: {next_kb_id}")
                     if next_kb_id:
                         # 获取知识库信息
                         queued_kb = (await db.execute(
@@ -143,6 +149,7 @@ def check_queued_knowledge_bases():
                                 KnowledgeBase.id == next_kb_id
                             )
                         )).scalar_one_or_none()
+                        Logger.info(f"Queued knowledge base: {queued_kb}")
 
                         if queued_kb:
                             Logger.info(f"Starting training for queued knowledge base {queued_kb.id}")

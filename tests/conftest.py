@@ -26,6 +26,12 @@ def pytest_addoption(parser):
         default=False,
         help="重置测试状态，忽略已保存的状态文件"
     )
+    parser.addoption(
+        "--show-print",
+        action="store_true",
+        default=True,
+        help="显示print输出"
+    )
 
 @pytest.fixture(scope="session")
 def reset_state(request):
@@ -35,12 +41,21 @@ def reset_state(request):
 # 配置pytest环境
 def pytest_configure(config):
     """配置pytest运行环境"""
+    # 允许print输出
+    config.option.capture = "no"
+    
     # 设置日志级别
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # 设置特定模块的日志级别
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
     logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
     logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
     logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
-    logging.getLogger('EmbedAi-Server').setLevel(logging.WARNING)
+    logging.getLogger('EmbedAi-Server').setLevel(logging.INFO)
     
     # 忽略特定警告
     warnings.filterwarnings("ignore", category=DeprecationWarning)

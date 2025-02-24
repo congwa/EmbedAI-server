@@ -8,7 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.knowledge_base import KnowledgeBase
 from app.core.logger import Logger
-from app.core.config import settings
+from app.schemas.llm import LLMConfig
+
+# 定义会话类型
+SessionType = Tuple[GraphRAG, datetime]
 
 class SessionManager:
     """会话管理器
@@ -20,6 +23,9 @@ class SessionManager:
     """
     
     _instance = None
+    sessions: Dict[str, SessionType]
+    cleanup_task: Optional[asyncio.Task]
+    db: Optional[Session]
     
     def __new__(cls, db: Session = None):
         if cls._instance is None:
@@ -42,33 +48,34 @@ class SessionManager:
         if db is not None:
             self.db = db
     
-    def _create_graphrag_config(self, llm_config: dict) -> GraphRAG.Config:
+    def _create_graphrag_config(self, llm_config: LLMConfig) -> GraphRAG.Config:
         """创建 GraphRAG 配置
         
         Args:
-            llm_config: LLM 配置字典
+            llm_config: LLM 配置
             
         Returns:
             GraphRAG.Config: GraphRAG 配置对象
         """
+        Logger.info(f"Creating GraphRAG config with LLM model: {llm_config.llm.model}")
         return GraphRAG.Config(
             llm_service=OpenAILLMService(
-                model=llm_config["llm"]["model"],
-                base_url=llm_config["llm"]["base_url"],
-                api_key=llm_config["llm"]["api_key"],
+                model=llm_config.llm.model,
+                base_url=llm_config.llm.base_url,
+                api_key=llm_config.llm.api_key,
                 mode=instructor.Mode.JSON,
                 client="openai"
             ),
             embedding_service=OpenAIEmbeddingService(
-                model=llm_config["embeddings"]["model"],
-                base_url=llm_config["embeddings"]["base_url"],
-                api_key=llm_config["embeddings"]["api_key"],
+                model=llm_config.embeddings.model,
+                base_url=llm_config.embeddings.base_url,
+                api_key=llm_config.embeddings.api_key,
                 client="openai",
-                embedding_dim=llm_config["embeddings"]["embedding_dim"],
+                embedding_dim=llm_config.embeddings.embedding_dim,
             ),
         )
     
-    def _init_graphrag(self, kb_id: str, llm_config: dict) -> GraphRAG:
+    async def _init_graphrag(self, kb_id: str, llm_config: LLMConfig) -> GraphRAG:
         """初始化 GraphRAG 实例
         
         Args:
@@ -81,12 +88,14 @@ class SessionManager:
         Raises:
             ValueError: 当知识库配置无效时
         """
+        Logger.info(f"_init_graphrag for knowledge base {kb_id}")
         if not self.db:
             raise ValueError("Database session not initialized")
             
-        kb = self.db.execute(
+        result = await self.db.execute(
             select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
-        ).scalar_one_or_none()
+        )
+        kb = result.scalars().first()
         
         if not kb:
             raise ValueError(f"Knowledge base {kb_id} not found")
@@ -96,37 +105,36 @@ class SessionManager:
         
         return GraphRAG(
             working_dir=kb.working_dir,
-            domain=llm_config.get("domain", "通用知识领域"),
-            example_queries="\n".join(llm_config.get("example_queries", [])),
-            entity_types=llm_config.get("entity_types", []),
+            domain=llm_config.domain,
+            example_queries="\n".join(llm_config.example_queries or []),
+            entity_types=llm_config.entity_types or [],
             config=self._create_graphrag_config(llm_config)
         )
     
-    def get_session(self, kb_id: str, llm_config: Optional[Dict[str, Any]] = None) -> GraphRAG:
-        """获取或创建 GraphRAG 会话
-        
-        Args:
-            kb_id: 知识库ID
-            llm_config: 可选的 LLM 配置，如果不提供则使用默认配置
-            
-        Returns:
-            GraphRAG: GraphRAG 会话实例
-        """
-        if not llm_config:
-            llm_config = settings.DEFAULT_LLM_CONFIG.model_dump()
-            
+    async def get_session(self, kb_id: str, llm_config: Optional[LLMConfig] = None) -> GraphRAG:
+        """获取或创建会话"""
         if kb_id not in self.sessions:
-            grag = self._init_graphrag(kb_id, llm_config)
-            self.sessions[kb_id] = (grag, datetime.now())
-            Logger.info(f"Created new GraphRAG session for knowledge base {kb_id}")
-        else:
-            grag, _ = self.sessions[kb_id]
-            self.sessions[kb_id] = (grag, datetime.now())
-            Logger.debug(f"Retrieved existing GraphRAG session for knowledge base {kb_id}")
+            # 获取知识库信息
+            result = await self.db.execute(
+                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+            )
+            kb = result.scalars().first()
             
-        return grag
+            if not kb:
+                raise ValueError(f"Knowledge base {kb_id} not found")
+                
+            Logger.info(f"Initializing GraphRAG for knowledge base {kb_id}")
+            
+            # 使用知识库配置或默认配置
+            config = LLMConfig.model_validate(kb.llm_config if llm_config is None else llm_config)
+            
+            # 创建新会话
+            grag = await self._init_graphrag(kb_id, config)
+            self.sessions[kb_id] = (grag, datetime.now())
+            
+        return self.sessions[kb_id][0]
     
-    def get_session_sync(self, kb_id: str, llm_config: Optional[Dict[str, Any]] = None) -> GraphRAG:
+    def get_session_sync(self, kb_id: str, llm_config: Optional[LLMConfig] = None) -> GraphRAG:
         """同步方式获取 GraphRAG 会话
         
         Args:
