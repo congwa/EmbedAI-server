@@ -37,43 +37,14 @@ class KnowledgeBaseService:
         required_permission: PermissionType
     ) -> bool:
         """检查用户对知识库的权限"""
-        # 管理员用户拥有所有权限
-        user = (await self.db.execute(
-            select(User).filter(User.id == user_id)
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
         )).scalar_one_or_none()
         
-        if user and user.is_admin:
-            Logger.debug(f"Admin user {user.email} granted all permissions for knowledge base {kb_id}")
-            return True
-            
-        # 查询用户权限
-        permission = (await self.db.execute(
-            select(knowledge_base_users).filter(
-                and_(
-                    knowledge_base_users.c.knowledge_base_id == kb_id,
-                    knowledge_base_users.c.user_id == user_id
-                )
-            )
-        )).first()
-        
-        if not permission:
-            Logger.warning(f"Permission check failed: User {user_id} has no permission for knowledge base {kb_id}")
+        if not kb:
             return False
             
-        # 权限等级检查
-        permission_levels = {
-            PermissionType.VIEWER: 0,
-            PermissionType.EDITOR: 1,
-            PermissionType.ADMIN: 2,
-            PermissionType.OWNER: 3
-        }
-        
-        has_permission = permission_levels[permission.permission] >= permission_levels[required_permission]
-        if not has_permission:
-            Logger.warning(f"Permission check failed: User {user_id} has insufficient permission level ({permission.permission}) for required level ({required_permission}) on knowledge base {kb_id}")
-        else:
-            Logger.debug(f"Permission check passed: User {user_id} has sufficient permission ({permission.permission}) for required level ({required_permission}) on knowledge base {kb_id}")
-        return has_permission
+        return await kb.check_permission(self.db, user_id, required_permission)
 
     async def get_user_permission(
         self,
@@ -81,16 +52,14 @@ class KnowledgeBaseService:
         user_id: int
     ) -> Optional[PermissionType]:
         """获取用户对知识库的权限级别"""
-        permission = (await self.db.execute(
-            select(knowledge_base_users).filter(
-                and_(
-                    knowledge_base_users.c.knowledge_base_id == kb_id,
-                    knowledge_base_users.c.user_id == user_id
-                )
-            )
-        )).first()
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
         
-        return permission.permission if permission else None
+        if not kb:
+            return None
+            
+        return await kb.get_member_permission(self.db, user_id)
 
     async def create(
         self,
@@ -121,7 +90,7 @@ class KnowledgeBaseService:
             entity_types=kb.entity_types or [],
             llm_config=llm_config.model_dump(),
             training_status=TrainingStatus.INIT,
-            working_dir=working_dir  # 设置工作目录
+            working_dir=working_dir
         )
         
         self.db.add(db_kb)
@@ -133,7 +102,8 @@ class KnowledgeBaseService:
             knowledge_base_users.insert().values(
                 knowledge_base_id=db_kb.id,
                 user_id=owner_id,
-                permission=PermissionType.OWNER
+                permission=PermissionType.OWNER,
+                created_at=datetime.now()
             )
         )
         
@@ -358,18 +328,7 @@ class KnowledgeBaseService:
             )
 
     async def get(self, kb_id: int, user_id: int) -> KnowledgeBase:
-        """获取知识库详情
-
-        Args:
-            kb_id (int): 知识库ID
-            user_id (int): 用户ID
-
-        Returns:
-            KnowledgeBase: 知识库对象，包含成员信息
-
-        Raises:
-            HTTPException: 当用户没有权限或知识库不存在时抛出
-        """
+        """获取知识库详情"""
         if not await self.check_permission(kb_id, user_id, PermissionType.VIEWER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -387,28 +346,7 @@ class KnowledgeBaseService:
             )
             
         # 获取知识库成员
-        members = await self.db.execute(
-            select(User, knowledge_base_users.c.permission)
-            .join(
-                knowledge_base_users,
-                User.id == knowledge_base_users.c.user_id
-            )
-            .filter(knowledge_base_users.c.knowledge_base_id == kb_id)
-        )
-        
-        # 构建成员列表
-        member_list = []
-        for member, permission in members:
-            member_list.append({
-                "id": member.id,
-                "email": member.email,
-                "permission": permission,
-                "is_owner": member.id == kb.owner_id,
-                "is_admin": member.is_admin
-            })
-            
-        # 将成员列表添加到知识库对象中
-        kb.members = member_list
+        kb.members = await kb.get_all_members(self.db)
             
         return kb
 
@@ -654,47 +592,27 @@ class KnowledgeBaseService:
         kb_id: int,
         current_user_id: int
     ) -> KnowledgeBaseMemberList:
-        """获取知识库成员列表
+        """获取知识库成员列表"""
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
         
-        Args:
-            kb_id: 知识库ID
-            current_user_id: 当前用户ID
+        if not kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
             
-        Returns:
-            KnowledgeBaseMemberList: 成员列表响应
-            
-        Raises:
-            HTTPException: 当用户没有权限或知识库不存在时
-        """
-        if not await self.check_permission(kb_id, current_user_id, PermissionType.VIEWER):
+        if not await kb.check_permission(self.db, current_user_id, PermissionType.VIEWER):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="没有足够的权限执行此操作"
             )
             
-        # 获取知识库所有成员
-        members = await self.db.execute(
-            select(User, knowledge_base_users.c.permission)
-            .join(
-                knowledge_base_users,
-                User.id == knowledge_base_users.c.user_id
-            )
-            .filter(knowledge_base_users.c.knowledge_base_id == kb_id)
-        )
-        
-        member_list = []
-        for member, permission in members:
-            member_list.append({
-                "id": member.id,
-                "email": member.email,
-                "permission": permission.value if permission else None,
-                "is_owner": member.id == (await self.get(kb_id, current_user_id)).owner_id,
-                "is_admin": member.is_admin
-            })
-            
+        members = await kb.get_all_members(self.db)
         return KnowledgeBaseMemberList(
-            members=[KnowledgeBaseMemberInfo(**m) for m in member_list],
-            total=len(member_list)
+            members=[KnowledgeBaseMemberInfo(**m) for m in members],
+            total=len(members)
         )
         
     async def add_knowledge_base_member(
@@ -703,23 +621,23 @@ class KnowledgeBaseService:
         member_data: KnowledgeBaseMemberCreate,
         current_user_id: int
     ) -> None:
-        """添加知识库成员
+        """添加知识库成员"""
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
         
-        Args:
-            kb_id: 知识库ID
-            member_data: 成员信息
-            current_user_id: 当前用户ID
-        
-        Raises:
-            HTTPException: 当用户没有权限、知识库不存在或操作失败时
-        """
-        kb = await self.get(kb_id, current_user_id)
+        if not kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
+            
         try:
             await kb.add_member(
+                self.db,
                 member_data.user_id,
                 member_data.permission,
-                current_user_id,
-                self.db
+                current_user_id
             )
         except ValueError as e:
             raise HTTPException(
@@ -734,24 +652,23 @@ class KnowledgeBaseService:
         member_data: KnowledgeBaseMemberUpdate,
         current_user_id: int
     ) -> None:
-        """更新知识库成员权限
+        """更新知识库成员权限"""
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
         
-        Args:
-            kb_id: 知识库ID
-            user_id: 目标用户ID
-            member_data: 更新的权限信息
-            current_user_id: 当前用户ID
+        if not kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
             
-        Raises:
-            HTTPException: 当用户没有权限、知识库不存在或操作失败时
-        """
-        kb = await self.get(kb_id, current_user_id)
         try:
             await kb.update_member_permission(
+                self.db,
                 user_id,
                 member_data.permission,
-                current_user_id,
-                self.db
+                current_user_id
             )
         except ValueError as e:
             raise HTTPException(
@@ -765,22 +682,22 @@ class KnowledgeBaseService:
         user_id: int,
         current_user_id: int
     ) -> None:
-        """移除知识库成员
+        """移除知识库成员"""
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
         
-        Args:
-            kb_id: 知识库ID
-            user_id: 要移除的用户ID
-            current_user_id: 当前用户ID
+        if not kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="知识库不存在"
+            )
             
-        Raises:
-            HTTPException: 当用户没有权限、知识库不存在或操作失败时
-        """
-        kb = await self.get(kb_id, current_user_id)
         try:
             await kb.remove_member(
+                self.db,
                 user_id,
-                current_user_id,
-                self.db
+                current_user_id
             )
         except ValueError as e:
             raise HTTPException(
@@ -794,16 +711,7 @@ class KnowledgeBaseService:
         identity_id: Optional[int],
         required_permission: PermissionType
     ) -> bool:
-        """检查用户对知识库的权限
-        
-        Args:
-            kb_id: 知识库ID
-            identity_id: 用户身份ID
-            required_permission: 所需权限级别
-            
-        Returns:
-            bool: 是否有权限
-        """
+        """检查用户对知识库的权限"""
         if not identity_id:
             Logger.warning(f"Permission check failed: No identity provided for knowledge base {kb_id}")
             return False
@@ -817,45 +725,17 @@ class KnowledgeBaseService:
             Logger.warning(f"Permission check failed: Identity {identity_id} not found")
             return False
             
+        kb = (await self.db.execute(
+            select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+        )).scalar_one_or_none()
+        
+        if not kb:
+            Logger.warning(f"Permission check failed: Knowledge base {kb_id} not found")
+            return False
+            
         # 检查官方用户权限
         if identity.official_user_id:
-            user = (await self.db.execute(
-                select(User).filter(User.id == identity.official_user_id)
-            )).scalar_one_or_none()
-            
-            # 管理员拥有所有权限
-            if user and user.is_admin:
-                Logger.debug(f"Admin user {user.email} granted all permissions for knowledge base {kb_id}")
-                return True
-                
-            # 检查知识库权限
-            permission = (await self.db.execute(
-                select(knowledge_base_users).filter(
-                    and_(
-                        knowledge_base_users.c.knowledge_base_id == kb_id,
-                        knowledge_base_users.c.user_id == identity.official_user_id
-                    )
-                )
-            )).first()
-            
-            if permission:
-                has_permission = PermissionType.check_permission_level(
-                    permission.permission,
-                    required_permission
-                )
-                if has_permission:
-                    Logger.debug(
-                        f"Permission check passed: Official user {identity.official_user_id} "
-                        f"has sufficient permission ({permission.permission}) "
-                        f"for required level ({required_permission}) on knowledge base {kb_id}"
-                    )
-                else:
-                    Logger.warning(
-                        f"Permission check failed: Official user {identity.official_user_id} "
-                        f"has insufficient permission level ({permission.permission}) "
-                        f"for required level ({required_permission}) on knowledge base {kb_id}"
-                    )
-                return has_permission
+            return await kb.check_permission(self.db, identity.official_user_id, required_permission)
                 
         # 检查第三方用户权限
         if identity.third_party_user_id:

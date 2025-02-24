@@ -86,16 +86,17 @@ class KnowledgeBase(Base):
                     
         return result
         
-    async def get_member_permission(self, user_id: int) -> Optional[PermissionType]:
+    async def get_member_permission(self, db: Session, user_id: int) -> Optional[PermissionType]:
         """获取用户在知识库中的权限
         
         Args:
+            db: 数据库会话
             user_id: 用户ID
             
         Returns:
             Optional[PermissionType]: 用户权限，如果不是成员则返回None
         """
-        result = await self.db.execute(
+        result = await db.execute(
             select(knowledge_base_users.c.permission)
             .where(
                 and_(
@@ -109,12 +110,14 @@ class KnowledgeBase(Base):
         
     async def check_permission(
         self,
+        db: Session,
         user_id: int,
         required_permission: PermissionType
     ) -> bool:
         """检查用户对知识库的权限
         
         Args:
+            db: 数据库会话
             user_id: 用户ID
             required_permission: 所需的权限级别
             
@@ -122,7 +125,7 @@ class KnowledgeBase(Base):
             bool: 是否有权限
         """
         # 管理员用户拥有所有权限
-        user = (await self.db.execute(
+        user = (await db.execute(
             select(User).filter(User.id == user_id)
         )).scalar_one_or_none()
         
@@ -130,7 +133,7 @@ class KnowledgeBase(Base):
             return True
             
         # 查询用户权限
-        permission = (await self.db.execute(
+        permission = (await db.execute(
             select(knowledge_base_users).filter(
                 and_(
                     knowledge_base_users.c.knowledge_base_id == self.id,
@@ -152,13 +155,16 @@ class KnowledgeBase(Base):
         
         return permission_levels[permission.permission] >= permission_levels[required_permission]
         
-    async def get_all_members(self) -> List[Dict[str, Any]]:
+    async def get_all_members(self, db: Session) -> List[Dict[str, Any]]:
         """获取所有成员信息
         
+        Args:
+            db: 数据库会话
+            
         Returns:
             List[Dict[str, Any]]: 成员列表
         """
-        result = await self.db.execute(
+        result = await db.execute(
             select(User, knowledge_base_users.c.permission)
             .join(
                 knowledge_base_users,
@@ -182,32 +188,32 @@ class KnowledgeBase(Base):
         
     async def add_member(
         self,
+        db: Session,
         user_id: int,
         permission: PermissionType,
-        current_user_id: int,
-        db: Session
+        current_user_id: int
     ) -> None:
         """添加成员
         
         Args:
+            db: 数据库会话
             user_id: 要添加的用户ID
             permission: 权限级别
             current_user_id: 当前操作用户ID
-            db: 数据库会话对象
             
         Raises:
             ValueError: 当用户已是成员或没有足够权限时
         """
         # 检查是否已是成员
-        if await self.get_member_permission(user_id):
+        if await self.get_member_permission(db, user_id):
             raise ValueError("用户已是知识库成员")
             
         # 检查操作权限
-        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(db, current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取当前用户有效权限
-        current_permission = await self.get_effective_permission(current_user_id)
+        current_permission = await self.get_effective_permission(db, current_user_id)
         if not current_permission:
             raise ValueError("没有足够的权限执行此操作")
             
@@ -235,6 +241,7 @@ class KnowledgeBase(Base):
         
     async def update_member_permission(
         self,
+        db: Session,
         user_id: int,
         new_permission: PermissionType,
         current_user_id: int
@@ -242,6 +249,7 @@ class KnowledgeBase(Base):
         """更新成员权限
         
         Args:
+            db: 数据库会话
             user_id: 目标用户ID
             new_permission: 新的权限级别
             current_user_id: 当前操作用户ID
@@ -254,15 +262,15 @@ class KnowledgeBase(Base):
             raise ValueError("不能修改知识库所有者的权限")
             
         # 检查操作权限
-        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(db, current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息
-        current_permission = await self.get_effective_permission(current_user_id)
+        current_permission = await self.get_effective_permission(db, current_user_id)
         if not current_permission:
             raise ValueError("没有足够的权限执行此操作")
             
-        target_permission = await self.get_member_permission(user_id)
+        target_permission = await self.get_member_permission(db, user_id)
         if not target_permission:
             raise ValueError("目标用户不是知识库成员")
             
@@ -274,7 +282,7 @@ class KnowledgeBase(Base):
         if PermissionType.get_permission_level(new_permission) >= PermissionType.get_permission_level(current_permission):
             raise ValueError("不能将用户权限设置为高于或等于自己的级别")
             
-        await self.db.execute(
+        await db.execute(
             knowledge_base_users.update()
             .where(
                 and_(
@@ -284,16 +292,18 @@ class KnowledgeBase(Base):
             )
             .values(permission=new_permission)
         )
-        await self.db.commit()
+        await db.commit()
         
     async def remove_member(
         self,
+        db: Session,
         user_id: int,
         current_user_id: int
     ) -> None:
         """移除成员
         
         Args:
+            db: 数据库会话
             user_id: 要移除的用户ID
             current_user_id: 当前操作用户ID
             
@@ -305,15 +315,15 @@ class KnowledgeBase(Base):
             raise ValueError("不能移除知识库所有者")
             
         # 检查操作权限
-        if not await self.check_permission(current_user_id, PermissionType.ADMIN):
+        if not await self.check_permission(db, current_user_id, PermissionType.ADMIN):
             raise ValueError("没有足够的权限执行此操作")
             
         # 获取权限信息
-        current_permission = await self.get_effective_permission(current_user_id)
+        current_permission = await self.get_effective_permission(db, current_user_id)
         if not current_permission:
             raise ValueError("没有足够的权限执行此操作")
             
-        target_permission = await self.get_member_permission(user_id)
+        target_permission = await self.get_member_permission(db, user_id)
         if not target_permission:
             raise ValueError("目标用户不是知识库成员")
             
@@ -321,7 +331,7 @@ class KnowledgeBase(Base):
         if PermissionType.get_permission_level(target_permission) >= PermissionType.get_permission_level(current_permission):
             raise ValueError("不能移除权限级别高于或等于自己的用户")
             
-        await self.db.execute(
+        await db.execute(
             knowledge_base_users.delete().where(
                 and_(
                     knowledge_base_users.c.knowledge_base_id == self.id,
@@ -329,19 +339,20 @@ class KnowledgeBase(Base):
                 )
             )
         )
-        await self.db.commit()
+        await db.commit()
 
-    async def get_effective_permission(self, user_id: int) -> Optional[PermissionType]:
+    async def get_effective_permission(self, db: Session, user_id: int) -> Optional[PermissionType]:
         """获取用户的有效权限
         
         Args:
+            db: 数据库会话
             user_id: 用户ID
             
         Returns:
             Optional[PermissionType]: 用户的有效权限，如果没有权限则返回None
         """
         # 获取用户信息
-        user = (await self.db.execute(
+        user = (await db.execute(
             select(User).filter(User.id == user_id)
         )).scalar_one_or_none()
         
@@ -353,7 +364,7 @@ class KnowledgeBase(Base):
             return PermissionType.OWNER
             
         # 查询用户权限
-        permission = (await self.db.execute(
+        permission = (await db.execute(
             select(knowledge_base_users).filter(
                 and_(
                     knowledge_base_users.c.knowledge_base_id == self.id,
