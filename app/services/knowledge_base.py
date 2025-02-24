@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List, Dict, Any, Sequence
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -502,15 +502,15 @@ class KnowledgeBaseService:
         Returns:
             List[Dict[str, Any]]: 知识库列表，每个知识库包含成员信息
         """
-        user = (await self.db.execute(
+        user: User = (await self.db.execute(
             select(User).filter(User.id == user_id)
         )).scalar_one_or_none()
         
         # 获取知识库列表
         if user.is_admin:
-            knowledge_bases = (await self.db.execute(select(KnowledgeBase))).scalars().all()
+            knowledge_bases: Sequence[KnowledgeBase] = (await self.db.execute(select(KnowledgeBase))).scalars().all()
         else:
-            knowledge_bases = (await self.db.execute(
+            knowledge_bases: Sequence[KnowledgeBase] = (await self.db.execute(
                 select(KnowledgeBase).join(
                     knowledge_base_users,
                     KnowledgeBase.id == knowledge_base_users.c.knowledge_base_id
