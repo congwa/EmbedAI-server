@@ -27,6 +27,7 @@ class ThirdPartyUser(Base):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+    identities = relationship("UserIdentity", back_populates="third_party_user", passive_deletes=True)
 
     def __repr__(self):
         return f"<ThirdPartyUser {self.id}>" 

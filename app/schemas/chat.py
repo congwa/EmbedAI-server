@@ -7,7 +7,7 @@ class ChatMessageBase(BaseModel):
     """聊天消息基础模型"""
     content: str = Field(..., description="消息内容")
     message_type: MessageType = Field(..., description="消息类型")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="消息元数据，如相关文档引用等")
+    doc_metadata: Optional[Dict[str, Any]] = Field(None, description="消息元数据，如相关文档引用等")
 
 class ChatMessageCreate(ChatMessageBase):
     """创建聊天消息的请求模型"""

@@ -32,7 +32,7 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment='更新时间')
     is_deleted = Column(Boolean, default=False, comment='是否删除')
     deleted_at = Column(DateTime, nullable=True, comment='删除时间')
-    metadata = Column(JSON, nullable=True, comment='文档元数据，存储额外的文档信息')
+    doc_metadata = Column(JSON, nullable=True, comment='文档元数据，存储额外的文档信息')
     source_url = Column(String, nullable=True, comment='文档来源URL')
     
     # 外键关联，添加 ondelete 设置

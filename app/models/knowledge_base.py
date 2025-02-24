@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, JSON, ARRAY, DateTime, Enum
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session
 
 from .database import Base
 from datetime import datetime
@@ -8,7 +9,7 @@ from app.schemas.base import CustomBaseModel
 from sqlalchemy.sql import select, and_
 from .associations import knowledge_base_users
 from .enums import PermissionType, TrainingStatus
-from app.models import User
+from app.models.user import User
 
 class KnowledgeBase(Base):
     """知识库模型
@@ -183,7 +184,8 @@ class KnowledgeBase(Base):
         self,
         user_id: int,
         permission: PermissionType,
-        current_user_id: int
+        current_user_id: int,
+        db: Session
     ) -> None:
         """添加成员
         
@@ -191,6 +193,7 @@ class KnowledgeBase(Base):
             user_id: 要添加的用户ID
             permission: 权限级别
             current_user_id: 当前操作用户ID
+            db: 数据库会话对象
             
         Raises:
             ValueError: 当用户已是成员或没有足够权限时
@@ -213,14 +216,14 @@ class KnowledgeBase(Base):
             raise ValueError("不能添加权限级别高于或等于自己的成员")
             
         # 检查要添加的用户是否存在
-        user = await self.db.execute(
+        user = await db.execute(
             select(User).filter(User.id == user_id)
         ).scalar_one_or_none()
         
         if not user:
             raise ValueError("用户不存在")
             
-        await self.db.execute(
+        await db.execute(
             knowledge_base_users.insert().values(
                 knowledge_base_id=self.id,
                 user_id=user_id,
@@ -228,7 +231,7 @@ class KnowledgeBase(Base):
                 created_at=datetime.now()
             )
         )
-        await self.db.commit()
+        await db.commit()
         
     async def update_member_permission(
         self,

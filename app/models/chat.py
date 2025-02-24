@@ -18,10 +18,7 @@ class Chat(Base):
     """
     __tablename__ = "chats"
     __table_args__ = (
-        {'comment': '聊天会话表，存储第三方用户与知识库的会话信息'},
-        # 创建联合索引，优化查询性能
         Index('idx_user_kb', 'third_party_user_id', 'knowledge_base_id'),
-        # 创建更新时间索引，用于排序
         Index('idx_updated_at', 'updated_at')
     )
 
@@ -45,6 +42,7 @@ class Chat(Base):
     knowledge_base = relationship("KnowledgeBase", back_populates="chats")
     current_admin = relationship("User", foreign_keys=[current_admin_id])
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+    sessions = relationship("ChatSession", back_populates="chat", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Chat {self.id}: {self.title}>"
@@ -60,9 +58,7 @@ class ChatMessage(Base):
     """
     __tablename__ = "chat_messages"
     __table_args__ = (
-        {'comment': '聊天消息表，存储会话中的具体消息'},
-        # 创建消息创建时间索引，用于排序
-        Index('idx_message_created_at', 'created_at')
+        Index('idx_message_created_at', 'created_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True, comment='消息ID')
@@ -70,7 +66,7 @@ class ChatMessage(Base):
     message_type = Column(SQLAlchemyEnum(MessageType), nullable=False, comment='消息类型')
     created_at = Column(DateTime, default=datetime.now, comment='创建时间')
     is_read = Column(Boolean, default=False, comment='是否已读')
-    metadata = Column(JSON, nullable=True, comment='消息元数据，如相关文档引用等')
+    doc_metadata = Column(JSON, nullable=True, comment='消息元数据，如相关文档引用等')
     
     # 外键关联
     chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, comment='所属会话ID')

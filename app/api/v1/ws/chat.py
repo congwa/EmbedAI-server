@@ -51,7 +51,7 @@ class ChatWebSocketManager:
             content=message_data["content"],
             message_type=MessageType.USER,
             sender_id=self.user_context.user_id,
-            metadata={
+            doc_metadata={
                 "client_id": self.user_context.client_id,
                 "identity_id": self.user_context.identity_id
             }
@@ -96,7 +96,7 @@ class ChatWebSocketManager:
             content=message_data["content"],
             message_type=MessageType.ADMIN,
             sender_id=self.user_context.user_id,
-            metadata={
+            doc_metadata={
                 "client_id": self.user_context.client_id,
                 "identity_id": self.user_context.identity_id,
                 "is_admin": True
@@ -128,7 +128,7 @@ class ChatWebSocketManager:
                 chat_id=self.chat_id,
                 content=ai_response["content"],
                 message_type=MessageType.ASSISTANT,
-                metadata={
+                doc_metadata={
                     **ai_response["metadata"],
                     "is_ai": True,
                     "client_id": self.user_context.client_id,
@@ -147,7 +147,7 @@ class ChatWebSocketManager:
                 chat_id=self.chat_id,
                 content="抱歉，生成回复时发生错误。",
                 message_type=MessageType.SYSTEM,
-                metadata={
+                doc_metadata={
                     "error": str(e),
                     "client_id": self.user_context.client_id,
                     "identity_id": self.user_context.identity_id
@@ -175,7 +175,7 @@ class ChatWebSocketManager:
                     "message_type": message.message_type,
                     "created_at": message.created_at,
                     "sender_id": message.sender_id,
-                    "metadata": message.metadata
+                    "doc_metadata": message.doc_metadata
                 }
             },
             exclude_client=self.user_context.client_id

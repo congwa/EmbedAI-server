@@ -10,8 +10,6 @@ from app.models.user import User
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
-    QueryRequest,
-    QueryResponse,
     KnowledgeBasePermissionCreate,
     KnowledgeBasePermissionUpdate,
     KnowledgeBaseMemberList,
@@ -326,12 +324,7 @@ class KnowledgeBaseService:
             Logger.info(f"Query successful for knowledge base {kb_id}: '{query[:100]}...' (if longer)")
 
             # 构建元数据
-            metadata = {
-                "kb_id": kb_id,
-                "top_k": top_k,
-                "user_type": user_context.user_type,
-                "user_id": user_context.user_id
-            }
+            doc_metadata = {"kb_id": kb_id, "top_k": top_k, "user_type": user_context.user_type, "user_id": user_context.user_id}
 
             # 记录审计日志
             await self.audit_manager.log_query(
@@ -344,7 +337,7 @@ class KnowledgeBaseService:
             return {
                 "query": query,
                 "results": result,
-                "metadata": metadata
+                "doc_metadata": doc_metadata
             }
 
         except Exception as e:
@@ -716,16 +709,17 @@ class KnowledgeBaseService:
             kb_id: 知识库ID
             member_data: 成员信息
             current_user_id: 当前用户ID
-            
+        
         Raises:
             HTTPException: 当用户没有权限、知识库不存在或操作失败时
         """
-        kb = await self.get(kb_id)
+        kb = await self.get(kb_id, current_user_id)
         try:
             await kb.add_member(
                 member_data.user_id,
                 member_data.permission,
-                current_user_id
+                current_user_id,
+                self.db
             )
         except ValueError as e:
             raise HTTPException(
@@ -751,12 +745,13 @@ class KnowledgeBaseService:
         Raises:
             HTTPException: 当用户没有权限、知识库不存在或操作失败时
         """
-        kb = await self.get(kb_id)
+        kb = await self.get(kb_id, current_user_id)
         try:
             await kb.update_member_permission(
                 user_id,
                 member_data.permission,
-                current_user_id
+                current_user_id,
+                self.db
             )
         except ValueError as e:
             raise HTTPException(
@@ -780,9 +775,13 @@ class KnowledgeBaseService:
         Raises:
             HTTPException: 当用户没有权限、知识库不存在或操作失败时
         """
-        kb = await self.get(kb_id)
+        kb = await self.get(kb_id, current_user_id)
         try:
-            await kb.remove_member(user_id, current_user_id)
+            await kb.remove_member(
+                user_id,
+                current_user_id,
+                self.db
+            )
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

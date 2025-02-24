@@ -173,6 +173,7 @@ async def step_add_member_to_kb(state: TestState, client: TestClient):
     another_user_id = state.get_step_data("another_user_id")
     
     # 添加成员
+    print(f"Attempting to add user with ID: {another_user_id} to knowledge base ID: {kb_id}")  # 调试信息
     response = client.post(
         f"/api/v1/admin/knowledge-bases/{kb_id}/members",
         json={

@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Dict, Set, Optional
 from datetime import datetime, timedelta
-from fastapi import WebSocket
+from fastapi import WebSocket, FastAPI
 from app.core.redis_manager import redis_manager
 from app.core.logger import Logger
 
@@ -217,5 +217,11 @@ class WSConnection:
 # 创建全局连接管理器实例
 connection_manager = ConnectionManager()
 
-# 启动连接监控
-asyncio.create_task(connection_manager.monitor_connections()) 
+async def start_monitoring_connections():
+    await connection_manager.monitor_connections()
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(start_monitoring_connections()) 

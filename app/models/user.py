@@ -39,6 +39,7 @@ class User(Base):
         passive_deletes=True
     )
     # accessible_knowledge_bases 通过 KnowledgeBase 中的 backref 自动创建
+    identities = relationship("UserIdentity", back_populates="official_user", passive_deletes=True)
 
     def __repr__(self):
         return f"<User {self.email}>"

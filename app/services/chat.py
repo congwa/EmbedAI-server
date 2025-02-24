@@ -85,7 +85,7 @@ class ChatService:
                 "created_at": message.created_at,
                 "is_read": message.is_read,
                 "sender_id": message.sender_id or 0,
-                "metadata": message.metadata or {}
+                "doc_metadata": message.doc_metadata or {}
             }
         )
         
@@ -319,7 +319,7 @@ class ChatService:
         content: str,
         message_type: MessageType,
         sender_id: Optional[int] = None,
-        metadata: Optional[dict] = None
+        doc_metadata: Optional[dict] = None
     ) -> ChatMessage:
         """添加新消息"""
         chat = await self.get_chat(chat_id)
@@ -329,7 +329,7 @@ class ChatService:
             content=content,
             message_type=message_type,
             sender_id=sender_id,
-            metadata=metadata
+            doc_metadata=doc_metadata
         )
         self.db.add(message)
         
@@ -355,7 +355,7 @@ class ChatService:
                     "message_type": message.message_type,
                     "created_at": message.created_at,
                     "sender_id": message.sender_id,
-                    "metadata": message.metadata
+                    "doc_metadata": message.doc_metadata
                 }
             }
         )

@@ -46,7 +46,7 @@ async def query_knowledge_base(
         return QueryResponse(
             query=result["query"],
             results=result["results"],
-            metadata=result["metadata"]
+            metadata=result["doc_metadata"]
         )
         
     except Exception as e:

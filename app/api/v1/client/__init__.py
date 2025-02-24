@@ -1,2 +1,2 @@
 """客户端API包"""
-from .client import router
+from .knowledge_base import router

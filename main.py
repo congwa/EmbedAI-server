@@ -16,9 +16,8 @@ from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware
 from app.core.logger import Logger
 from contextlib import asynccontextmanager
 import uvicorn
-
-from fast_graphrag import GraphRAG, QueryParam
 from app.models import *  # 导入所有模型
+from app.core.ws import connection_manager, start_monitoring_connections
 
 # 1. 使用新的 lifespan 方式替代 on_event
 @asynccontextmanager
@@ -26,6 +25,7 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     Logger.info("Application starting up...")
     await create_tables()
+    await start_monitoring_connections()
     yield
     # 关闭时执行
     Logger.info("Application shutting down...")
@@ -59,6 +59,13 @@ app.add_middleware(RequestValidationMiddleware)
 # 注册主路由
 from app.api.v1 import api_router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# 注册WebSocket路由
+from app.api.v1.ws.chat import router as chat_router
+app.include_router(chat_router, prefix='/ws')
+
+async def start_monitoring_connections():
+    await connection_manager.monitor_connections()
 
 # 3. 修改 uvicorn.run 的调用方式
 if __name__ == "__main__":
