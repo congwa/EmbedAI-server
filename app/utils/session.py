@@ -11,6 +11,32 @@ from app.core.logger import Logger
 from app.schemas.llm import LLMConfig
 import fast_graphrag._services._state_manager as state_manager
 
+from fast_graphrag._storage._namespace import Workspace
+
+from functools import wraps
+from fast_graphrag._storage._namespace import Workspace
+import os
+
+from fast_graphrag._storage._namespace import Workspace
+
+# 猴子补丁：修复GraphRAG在加载时无法正确获取检查点的问题
+def custom_get_load_path(self) -> Optional[str]:
+    # 自定义加载路径的逻辑
+    self.checkpoints = sorted(
+        (int(x.name) for x in os.scandir(self.working_dir) if x.is_dir() and not x.name.startswith("0__err_")),
+        reverse=True,
+    )
+    if self.checkpoints and not self.current_load_checkpoint:
+        self.current_load_checkpoint = self.checkpoints[0]
+        
+    load_path = self.get_path(self.working_dir, self.current_load_checkpoint)
+    if load_path == self.working_dir and len([x for x in os.scandir(load_path) if x.is_file()]) == 0:
+        return None
+    return load_path
+
+# 替换原方法
+Workspace.get_load_path = custom_get_load_path
+
 # 定义会话类型
 SessionType = Tuple[GraphRAG, datetime]
 
