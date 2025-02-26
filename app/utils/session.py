@@ -2,7 +2,8 @@ from typing import Dict, Optional, Any, Tuple
 from datetime import datetime, timedelta
 import asyncio
 from fast_graphrag import GraphRAG
-from fast_graphrag._llm import OpenAIEmbeddingService, OpenAILLMService
+from fast_graphrag._llm import OpenAIEmbeddingService
+from .custom_openai_llm import CustomOpenAILLMService
 import instructor
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -144,7 +145,7 @@ class SessionManager:
         Logger.info(f"Creating GraphRAG config with LLM api_key: {llm_config.llm.api_key}")
         Logger.info(f"Creating GraphRAG config with LLM model: {llm_config.llm.model}")
         return GraphRAG.Config(
-            llm_service=OpenAILLMService(
+            llm_service=CustomOpenAILLMService(
                 model=llm_config.llm.model,
                 base_url=llm_config.llm.base_url,
                 api_key=llm_config.llm.api_key,
