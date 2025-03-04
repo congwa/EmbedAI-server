@@ -98,7 +98,7 @@ class ChatService:
         """从Redis获取缓存的消息"""
         return await redis_manager.get_cached_messages(chat_id, start, end)
         
-    async def get_or_create_third_party_user(self, user_id: int) -> ThirdPartyUser:
+    async def get_or_create_third_party_user(self, third_party_user_id: int) -> ThirdPartyUser:
         """获取或创建第三方用户
         
         Args:
@@ -108,21 +108,21 @@ class ChatService:
             ThirdPartyUser: 第三方用户对象
         """
         user = (await self.db.execute(
-            select(ThirdPartyUser).filter(ThirdPartyUser.id == user_id)
+            select(ThirdPartyUser).filter(ThirdPartyUser.id == third_party_user_id)
         )).scalar_one_or_none()
         
         if not user:
-            user = ThirdPartyUser(id=user_id)
+            user = ThirdPartyUser(id=third_party_user_id)
             self.db.add(user)
             await self.db.commit()
             await self.db.refresh(user)
-            Logger.info(f"Created new third party user with ID {user_id}")
+            Logger.info(f"Created new third party user with ID {third_party_user_id}")
             
         return user
 
     async def create_chat(
         self,
-        user_id: int,
+        third_party_user_id: int,
         kb_id: int,
         title: Optional[str] = None
     ) -> Chat:
@@ -140,11 +140,11 @@ class ChatService:
             HTTPException: 当知识库不存在时
         """
         # 获取或创建第三方用户
-        user = await self.get_or_create_third_party_user(user_id)
+        user = await self.get_or_create_third_party_user(third_party_user_id)
             
         # 创建新会话
         chat = Chat(
-            third_party_user_id=user_id,
+            third_party_user_id=third_party_user_id,
             knowledge_base_id=kb_id,
             title=title
         )
@@ -156,7 +156,7 @@ class ChatService:
         # 缓存会话信息
         await self._cache_chat(chat)
         
-        Logger.info(f"Created new chat {chat.id} for third party user {user_id} with knowledge base {kb_id}")
+        Logger.info(f"Created new chat {chat.id} for third party user {third_party_user_id} with knowledge base {kb_id}")
         return chat
 
     async def get_chat(self, chat_id: int) -> Chat:

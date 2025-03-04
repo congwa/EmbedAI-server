@@ -38,26 +38,10 @@ async def setup_test_data(state: TestState, client: TestClient) -> AsyncGenerato
     state.reset()
     yield
 
-@step_decorator("create_third_party_user")
-async def step_create_third_party_user(state: TestState, client: TestClient):
-    """创建第三方用户"""
-    admin_token = state.get_step_data("admin_token")
-    response = client.post(
-        "/api/v1/admin/third-party-users",
-        json={
-            "name": "测试用户",
-            "avatar_url": "https://example.com/avatar.jpg",
-            "source": "test"
-        },
-        headers={"Authorization": f"Bearer {admin_token}"}
-    )
-    assert response.status_code == 200
-    state.save_step_data("third_party_user_id", response.json()["data"]["id"])
-    return response.json()
-
 @step_decorator("train_knowledge_base")
 async def step_train_knowledge_base(state: TestState, client: TestClient):
     """训练知识库"""
+   
     user_token = state.get_step_data("user_token")
     kb_id = state.get_step_data("kb_id")
     
@@ -179,6 +163,8 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
 @step_decorator("create_chat")
 async def step_create_chat(state: TestState, client: TestClient):
     """创建聊天会话"""
+    # 写死三方用户 ID
+    state.save_step_data("third_party_user_id", "1234567890")
     user_token = state.get_step_data("user_token")
     kb_id = state.get_step_data("kb_id")
     third_party_user_id = state.get_step_data("third_party_user_id")
@@ -312,9 +298,6 @@ async def test_chat_flow(state: TestState, client: TestClient):
     
     # 训练知识库
     await step_train_knowledge_base(state, client)
-    
-    # 创建第三方用户
-    await step_create_third_party_user(state, client)
     
     # 创建聊天会话
     await step_create_chat(state, client)
