@@ -67,23 +67,25 @@ class ChatList(BaseModel):
 
 class ChatMessageResponse(CustomBaseModel):
     """聊天消息响应模型"""
-    id: int
-    content: str
-    message_type: MessageType
+    id: int = Field(..., description="消息ID")
+    content: str = Field(..., description="消息内容")
+    message_type: str = Field(..., description="消息类型")  # 根据实际类型调整
     created_at: datetime = Field(..., description="创建时间") 
-    is_read: bool
+    is_read: bool = Field(..., description="是否已读")
+
     class Config:
         from_attributes = True
 
 class ChatResponse(CustomBaseModel):
     """聊天会话响应模型"""
-    id: int
-    title: Optional[str] = None
-    chat_mode: ChatMode
+    id: int = Field(..., description="会话ID")
+    title: Optional[str] = Field(None, description="会话标题")
+    chat_mode: str = Field(..., description="聊天模式")  # 根据实际类型调整
     created_at: datetime = Field(..., description="创建时间") 
     updated_at: datetime = Field(..., description="更新时间")
-    is_active: bool
-    messages: List[ChatMessageResponse] = []
+    is_active: bool = Field(..., description="是否活跃")
+    messages: Optional[List[ChatMessageResponse]] = Field(default=None, description="会话中的消息列表")
+
     class Config:
         from_attributes = True
 
@@ -93,3 +95,8 @@ class ChatListResponse(CustomBaseModel):
     items: List[ChatResponse] 
     class Config:
         from_attributes = True
+
+class ChatRequest(BaseModel):
+    third_party_user_id: int
+    kb_id: int
+    title: Optional[str] = None

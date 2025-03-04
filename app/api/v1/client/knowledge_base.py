@@ -7,10 +7,10 @@ from app.services.session import SessionManager
 from app.schemas.knowledge_base import QueryRequest, QueryResponse
 from app.schemas.identity import UserContext, UserType
 from app.core.logger import Logger
+from app.core.response import ResponseModel, APIResponse
+router = APIRouter(prefix="/chat", tags=["client-chat"])
 
-router = APIRouter()
-
-@router.post("/{kb_id}/query", response_model=QueryResponse)
+@router.post("/{kb_id}/query", response_model=ResponseModel[QueryResponse])
 async def query_knowledge_base(
     kb_id: int,
     request: QueryRequest,
@@ -43,15 +43,15 @@ async def query_knowledge_base(
             top_k=request.top_k
         )
         
-        return QueryResponse(
+        return APIResponse.success(data=QueryResponse(
             query=result["query"],
             results=result["results"],
             metadata=result["doc_metadata"]
-        )
+        ))
         
     except Exception as e:
         Logger.error(f"Query failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"查询失败: {str(e)}"
+        return APIResponse.error(
+            message=f"查询失败: {str(e)}",
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
         ) 

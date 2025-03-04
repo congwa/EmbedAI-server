@@ -36,8 +36,8 @@ class ChatService:
                 "third_party_user_id": chat.third_party_user_id,
                 "knowledge_base_id": chat.knowledge_base_id,
                 "current_admin_id": chat.current_admin_id or 0,
-                "last_message_at": chat.last_message_at,
-                "updated_at": datetime.now()
+                "last_message_at": chat.last_message_at.strftime("%Y-%m-%d %H:%M:%S") if chat.last_message_at else None,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
         )
         
@@ -110,24 +110,27 @@ class ChatService:
         Raises:
             HTTPException: 当知识库不存在时
         """
-        # 获取或创建第三方用户
         user = await self.get_or_create_third_party_user(third_party_user_id)
             
-        # 创建新会话
         chat = Chat(
             third_party_user_id=third_party_user_id,
             knowledge_base_id=kb_id,
-            title=title
+            title=title,
+            messages=[]  # 初始化为空列表
         )
         
-        self.db.add(chat)
-        await self.db.commit()
-        await self.db.refresh(chat)
+        Logger.info(f"Creating chat with third_party_user_id: {third_party_user_id}, kb_id: {kb_id}, title: {title}")
         
-        # 缓存会话信息
+        try:
+            self.db.add(chat)
+            await self.db.commit()
+            await self.db.refresh(chat)
+        except Exception as e:
+            Logger.error(f"Error creating chat: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error creating chat")
+        
         await self._cache_chat(chat)
-        
-        Logger.info(f"Created new chat {chat.id} for third party user {third_party_user_id} with knowledge base {kb_id}")
+
         return chat
 
     async def get_chat(self, chat_id: int) -> Chat:

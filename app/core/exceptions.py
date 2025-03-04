@@ -4,6 +4,7 @@ from typing import Union, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.response import APIResponse
 from fastapi.exceptions import RequestValidationError
+from app.core.logger import Logger
 
 class BaseAPIException(HTTPException):
     """基础API异常类
@@ -109,6 +110,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     print(f"HTTP Exception occurred: {exc.detail}")  # 打印错误详情
     print(f"Status code: {exc.status_code}")  # 打印状态码
     print(f"Headers: {exc.headers}")  # 打印头信息
+    Logger.error(f"HTTP Exception occurred: {exc.detail}")
     return APIResponse.error(
         message=exc.detail,
         code=exc.status_code,
@@ -124,6 +126,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     error_msg = f"Database error: {str(exc)}"
     print(f"Database error occurred: {error_msg}")  # 打印数据库错误
     print(f"Error type: {type(exc)}")  # 打印错误类型
+    Logger.error(f"Database error occurred: {error_msg}")
     return APIResponse.error(
         message=error_msg,
         code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -159,6 +162,8 @@ async def validation_exception_handler(request: Request, exc: Union[ValidationEr
         # 处理自定义的验证错误
         detail = exc.detail
 
+
+    Logger.error(f"Validation error: {detail}")
     return APIResponse.error(
         message=detail,
         code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -184,6 +189,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     print(error_msg)  # 打印错误信息
     print(f"Error type: {type(exc)}")  # 打印错误类型
     print(f"Error details: {exc.__dict__}")  # 打印错误详情
+    Logger.error(f"An unexpected error occurred: {str(exc)}, details: {exc.__dict__}")
     return APIResponse.error(
         message=error_msg,
         code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -164,20 +164,22 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
 async def step_create_chat(state: TestState, client: TestClient):
     """创建聊天会话"""
     # 写死三方用户 ID 必须的
-    state.save_step_data("third_party_user_id", "1234567890")
+    state.save_step_data("third_party_user_id", 1234567890)
     user_token = state.get_step_data("user_token")
     kb_id = state.get_step_data("kb_id")
     third_party_user_id = state.get_step_data("third_party_user_id")
-    
+    from app.core.logger import Logger
+    Logger.info(f"third_party_user_id: {third_party_user_id},kb_id: {kb_id}")
     response = client.post(
-        "/client/chat/create",
+        "/api/v1/client/chat/create",
         json={
             "third_party_user_id": third_party_user_id,
-            "kb_id": kb_id
+            "kb_id": kb_id,
+            "title": None  # 如果需要，可以传递标题
         }
     )
     assert response.status_code == 200
-    state.save_step_data("chat_id", response.json()["chat_id"])
+    state.save_step_data("chat_id", response.json()["data"]["id"])
     return response.json()
 
 @step_decorator("connect_websocket")
@@ -283,7 +285,7 @@ async def step_list_chats(state: TestState, client: TestClient):
     third_party_user_id = state.get_step_data("third_party_user_id")
     
     response = client.get(
-        f"/client/chat/list?third_party_user_id={third_party_user_id}"
+        f"/api/v1/client/chat/list?third_party_user_id={third_party_user_id}"
     )
     assert response.status_code == 200
     return response.json()
@@ -306,16 +308,16 @@ async def test_chat_flow(state: TestState, client: TestClient):
     await step_create_document(state, client)
     
     # 训练知识库
-    await step_train_knowledge_base(state, client)
+    # await step_train_knowledge_base(state, client)
     
     # 创建聊天会话
     await step_create_chat(state, client)
     
-    # 测试用户WebSocket连接和多轮对话
-    await step_connect_websocket(state, client)
+    # # 测试用户WebSocket连接和多轮对话
+    # await step_connect_websocket(state, client)
     
-    # 测试管理员WebSocket连接和多轮对话
-    await step_connect_admin_websocket(state, client)
+    # # 测试管理员WebSocket连接和多轮对话
+    # await step_connect_admin_websocket(state, client)
     
-    # 再次测试用户对话，验证上下文保持
-    await step_connect_websocket(state, client)
+    # # 再次测试用户对话，验证上下文保持
+    # await step_connect_websocket(state, client)

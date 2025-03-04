@@ -17,9 +17,9 @@ class UserIdentity(Base):
     last_active_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment='身份最后活跃时间')
 
     # 关系
-    official_user = relationship("User", back_populates="identities", comment='与官方用户的关系')
-    third_party_user = relationship("ThirdPartyUser", back_populates="identities", comment='与第三方用户的关系')
-    active_sessions = relationship("ChatSession", back_populates="user_identity", comment='与聊天会话的关系')
+    official_user = relationship("User", back_populates="identities")
+    third_party_user = relationship("ThirdPartyUser", back_populates="identities")
+    active_sessions = relationship("ChatSession", back_populates="user_identity")
 
 class ChatSession(Base):
     """聊天会话状态模型，用于管理用户在聊天会话中的状态"""
@@ -35,5 +35,5 @@ class ChatSession(Base):
     expires_at = Column(DateTime, comment='会话状态过期时间')
 
     # 关系
-    chat = relationship("Chat", back_populates="sessions", comment='与聊天会话的关系')
-    user_identity = relationship("UserIdentity", back_populates="active_sessions", comment='与用户身份的关系') 
+    chat = relationship("Chat", back_populates="sessions")
+    user_identity = relationship("UserIdentity", back_populates="active_sessions") 

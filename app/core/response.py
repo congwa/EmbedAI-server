@@ -7,7 +7,7 @@ from app.schemas.base import CustomBaseModel
 
 T = TypeVar("T")
 
-class ResponseModel(BaseModel, Generic[T]):
+class ResponseModel(CustomBaseModel, Generic[T]):
     """统一响应 Pydantic 模型"""
     success: bool = True
     code: int = status.HTTP_200_OK

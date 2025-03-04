@@ -1,10 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.models.database import create_tables
 from app.core.exceptions import (
-    HTTPException,
     ValidationError,
     SQLAlchemyError,
     http_exception_handler,
@@ -18,6 +17,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from app.models import *  # 导入所有模型
 from app.core.ws import connection_manager, start_monitoring_connections
+from fastapi.responses import JSONResponse
+import logging
 
 # 1. 使用新的 lifespan 方式替代 on_event
 @asynccontextmanager
@@ -35,8 +36,13 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
+    debug=True
 )
+
+# 设置日志记录
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("EmbedAi-Server")
 
 # 注册异常处理器
 app.add_exception_handler(HTTPException, http_exception_handler)
@@ -44,6 +50,15 @@ app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(ValidationError, validation_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error occurred: {exc}")
+    logger.error(f"Request path: {request.url.path}, method: {request.method}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "message": str(exc)},
+    )
 
 # 添加中间件
 app.add_middleware(

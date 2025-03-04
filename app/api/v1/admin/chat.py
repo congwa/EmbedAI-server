@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.chat import ChatList
 from app.core.logger import Logger
 from sqlalchemy.orm import Session
+from app.core.response import APIResponse, ResponseModel
 from app.services.auth import get_current_admin_user
 from app.models.enums import ChatMode, MessageType
 from app.schemas.chat import (
@@ -19,7 +20,7 @@ from app.schemas.chat import (
 
 router = APIRouter(prefix="/admin/chats", tags=["admin-chat"])
 
-@router.get("/", response_model=List[ChatListResponse])
+@router.get("/", response_model=ResponseModel[List[ChatListResponse]])
 async def list_chats(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -40,9 +41,9 @@ async def list_chats(
         limit=limit,
         include_inactive=include_inactive
     )
-    return chats
+    return APIResponse.success(data=chats)
 
-@router.get("/{chat_id}", response_model=ChatResponse)
+@router.get("/{chat_id}", response_model=ResponseModel[ChatResponse])
 async def get_chat(
     chat_id: int,
     current_admin: User = Depends(get_current_admin_user),
@@ -58,9 +59,9 @@ async def get_chat(
         user_id=current_admin.id
     )
     
-    return chat
+    return APIResponse.success(data=chat)
 
-@router.post("/{chat_id}/switch-mode")
+@router.post("/{chat_id}/switch-mode", response_model=ResponseModel[ChatResponse])
 async def switch_chat_mode(
     chat_id: int,
     mode: ChatMode,
@@ -78,9 +79,9 @@ async def switch_chat_mode(
         admin_id=current_admin.id,
         mode=mode
     )
-    return chat
+    return APIResponse.success(data=chat)
 
-@router.post("/{chat_id}/messages", response_model=ChatMessageResponse)
+@router.post("/{chat_id}/messages", response_model=ResponseModel[ChatMessageResponse])
 async def send_admin_message(
     chat_id: int,
     message: ChatMessageCreate,
@@ -112,9 +113,9 @@ async def send_admin_message(
         metadata=message.metadata
     )
     
-    return chat_message
+    return APIResponse.success(data=chat_message)
 
-@router.get("/{chat_id}/messages", response_model=List[ChatMessageResponse])
+@router.get("/{chat_id}/messages", response_model=ResponseModel[List[ChatMessageResponse]])
 async def list_chat_messages(
     chat_id: int,
     skip: int = Query(0, ge=0),
@@ -133,9 +134,9 @@ async def list_chat_messages(
         limit=limit
     )
     
-    return messages
+    return APIResponse.success(data=messages)
 
-@router.get("/users/{third_party_user_id}/stats")
+@router.get("/users/{third_party_user_id}/stats", response_model=ResponseModel[ChatStats])
 async def get_user_chat_stats(
     third_party_user_id: int,
     current_admin: User = Depends(get_current_admin_user),
@@ -149,21 +150,21 @@ async def get_user_chat_stats(
     
     chat_service = ChatService(db)
     chats = await chat_service.list_user_chats(
-        user_id=third_party_user_id,
+        third_party_user_id=third_party_user_id,
         limit=1000  # 获取足够多的聊天记录用于统计
     )
     
     total_chats = len(chats)
     total_messages = sum(len(chat.messages) for chat in chats)
     
-    return {
+    return APIResponse.success(data={
         "third_party_user_id": third_party_user_id,
         "total_chats": total_chats,
         "total_messages": total_messages,
         "last_active": max((chat.updated_at for chat in chats), default=None) if chats else None
-    }
+    })
 
-@router.get("/knowledge-bases/{kb_id}/stats")
+@router.get("/knowledge-bases/{kb_id}/stats", response_model=ResponseModel)
 async def get_knowledge_base_chat_stats(
     kb_id: int,
     current_admin: User = Depends(get_current_admin_user),
@@ -181,7 +182,7 @@ async def get_knowledge_base_chat_stats(
         detail="知识库聊天统计功能尚未实现"
     )
 
-@router.post("/{chat_id}/restore")
+@router.post("/{chat_id}/restore", response_model=ResponseModel)
 async def restore_chat(
     chat_id: int,
     current_admin: User = Depends(get_current_admin_user),
@@ -198,9 +199,9 @@ async def restore_chat(
         chat_id=chat_id,
         admin_user_id=current_admin.id
     )
-    return {"message": "聊天会话已恢复", "chat_id": chat.id}
+    return APIResponse.success(data={"message": "聊天会话已恢复", "chat_id": chat.id})
 
-@router.get("/deleted", response_model=ChatList)
+@router.get("/deleted", response_model=ResponseModel[ChatList])
 async def list_deleted_chats(
     third_party_user_id: Optional[int] = None,
     knowledge_base_id: Optional[int] = None,
@@ -220,7 +221,7 @@ async def list_deleted_chats(
     if third_party_user_id:
         # 获取指定用户的已删除聊天列表
         chats = await chat_service.list_user_chats(
-            user_id=third_party_user_id,
+            third_party_user_id=third_party_user_id,
             kb_id=knowledge_base_id,
             skip=skip,
             limit=limit,
@@ -235,7 +236,7 @@ async def list_deleted_chats(
             detail="获取所有已删除聊天会话功能尚未实现"
         )
     
-    return ChatList(
+    return APIResponse.success(data=ChatList(
         total=len(chats),
         items=chats
-    ) 
+    )) 
