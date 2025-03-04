@@ -244,7 +244,7 @@ class ChatService:
 
     async def list_user_chats(
         self,
-        user_id: int,
+        third_party_user_id: int,
         kb_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 20,
@@ -253,7 +253,7 @@ class ChatService:
         """获取用户的聊天会话列表
         
         Args:
-            user_id: 第三方用户ID
+            third_party_user_id: 第三方用户ID
             kb_id: 知识库ID（可选，用于筛选特定知识库的会话）
             skip: 分页起始位置
             limit: 每页数量
@@ -263,9 +263,9 @@ class ChatService:
             List[Chat]: 会话列表
         """
         # 确保用户存在
-        await self.get_or_create_third_party_user(user_id)
+        await self.get_or_create_third_party_user(third_party_user_id)
         
-        query = select(Chat).filter(Chat.third_party_user_id == user_id)
+        query = select(Chat).filter(Chat.third_party_user_id == third_party_user_id)
         
         if kb_id is not None:
             query = query.filter(Chat.knowledge_base_id == kb_id)
@@ -281,7 +281,7 @@ class ChatService:
         for chat in chats:
             await self._cache_chat(chat)
             
-        Logger.debug(f"Retrieved {len(chats)} chats for third party user {user_id}")
+        Logger.debug(f"Retrieved {len(chats)} chats for third party user {third_party_user_id}")
         return chats
 
     async def add_message(

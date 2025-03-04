@@ -16,7 +16,7 @@ class ThirdPartyUser(Base):
     __table_args__ = {'comment': '第三方用户表，用于标识使用查询功能的外部用户'}
 
     id = Column(Integer, primary_key=True, index=True, comment='用户ID')
-    client_id = Column(String(100), nullable=True, index=True, comment='客户端ID，用于标识来源')
+    client_id = Column(String(100), nullable=True, index=True, comment='创建的时候的客户端ID，用于标识来源,作为保留字段，现在无作用')
     created_at = Column(DateTime, default=datetime.now, comment='创建时间')
     last_active_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment='最后活跃时间')
     

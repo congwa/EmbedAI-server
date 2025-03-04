@@ -163,23 +163,21 @@ async def step_train_knowledge_base(state: TestState, client: TestClient):
 @step_decorator("create_chat")
 async def step_create_chat(state: TestState, client: TestClient):
     """创建聊天会话"""
-    # 写死三方用户 ID
+    # 写死三方用户 ID 必须的
     state.save_step_data("third_party_user_id", "1234567890")
     user_token = state.get_step_data("user_token")
     kb_id = state.get_step_data("kb_id")
     third_party_user_id = state.get_step_data("third_party_user_id")
     
     response = client.post(
-        "/api/v1/admin/chats",
+        "/client/chat/create",
         json={
-            "knowledge_base_id": kb_id,
             "third_party_user_id": third_party_user_id,
-            "chat_mode": ChatMode.AI
-        },
-        headers={"Authorization": f"Bearer {user_token}"}
+            "kb_id": kb_id
+        }
     )
     assert response.status_code == 200
-    state.save_step_data("chat_id", response.json()["data"]["id"])
+    state.save_step_data("chat_id", response.json()["chat_id"])
     return response.json()
 
 @step_decorator("connect_websocket")
@@ -278,6 +276,17 @@ async def step_connect_admin_websocket(state: TestState, client: TestClient):
         assert response["type"] == "message"
         assert response["data"]["content"] == "我们的系统可以帮助你解答问题"
         assert response["data"]["message_type"] == "admin"
+
+@step_decorator("list_chats")
+async def step_list_chats(state: TestState, client: TestClient):
+    """列出聊天会话"""
+    third_party_user_id = state.get_step_data("third_party_user_id")
+    
+    response = client.get(
+        f"/client/chat/list?third_party_user_id={third_party_user_id}"
+    )
+    assert response.status_code == 200
+    return response.json()
 
 @pytest.mark.asyncio
 async def test_chat_flow(state: TestState, client: TestClient):
