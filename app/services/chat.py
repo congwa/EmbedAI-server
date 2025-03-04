@@ -73,7 +73,7 @@ class ChatService:
         """获取或创建第三方用户
         
         Args:
-            user_id: 第三方用户ID
+            third_party_user_id: 第三方用户ID
             
         Returns:
             ThirdPartyUser: 第三方用户对象
@@ -100,7 +100,7 @@ class ChatService:
         """创建新的聊天会话
         
         Args:
-            user_id: 第三方用户ID
+            third_party_user_id: 第三方用户ID
             kb_id: 知识库ID
             title: 会话标题（可选）
             
@@ -211,13 +211,13 @@ class ChatService:
     async def check_chat_ownership(
         self,
         chat_id: int,
-        user_id: int
+        third_party_user_id: int
     ) -> bool:
         """检查聊天会话是否属于指定用户
         
         Args:
             chat_id: 会话ID
-            user_id: 第三方用户ID
+            third_party_user_id: 第三方用户ID
             
         Returns:
             bool: 是否属于该用户
@@ -225,7 +225,7 @@ class ChatService:
         # 尝试从缓存获取
         cached = await self._get_cached_chat(chat_id)
         if cached:
-            return cached["third_party_user_id"] == user_id
+            return cached["third_party_user_id"] == third_party_user_id
             
         # 从数据库获取
         result = (await self.db.execute(
@@ -233,13 +233,13 @@ class ChatService:
             .filter(
                 and_(
                     Chat.id == chat_id,
-                    Chat.third_party_user_id == user_id
+                    Chat.third_party_user_id == third_party_user_id
                 )
             )
         )).first()
         
         is_owner = result is not None
-        Logger.debug(f"Chat ownership check: chat_id={chat_id}, user_id={user_id}, is_owner={is_owner}")
+        Logger.debug(f"Chat ownership check: chat_id={chat_id}, user_id={third_party_user_id}, is_owner={is_owner}")
         return is_owner
 
     async def list_user_chats(
