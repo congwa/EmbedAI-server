@@ -13,35 +13,6 @@ from app.core.logger import Logger
 from app.core.redis_manager import redis_manager
 from app.core.ws import connection_manager
 
-class ChatManager:
-    """聊天管理器，用于管理WebSocket连接"""
-    def __init__(self):
-        self.active_connections: Dict[int, Dict[str, WebSocket]] = {}
-    
-    async def connect(self, chat_id: int, client_id: str, websocket: WebSocket):
-        """添加新的WebSocket连接"""
-        if chat_id not in self.active_connections:
-            self.active_connections[chat_id] = {}
-        await websocket.accept()
-        self.active_connections[chat_id][client_id] = websocket
-    
-    def disconnect(self, chat_id: int, client_id: str):
-        """移除WebSocket连接"""
-        if chat_id in self.active_connections:
-            self.active_connections[chat_id].pop(client_id, None)
-            if not self.active_connections[chat_id]:
-                self.active_connections.pop(chat_id)
-    
-    async def broadcast_to_chat(self, chat_id: int, message: dict, exclude_client: str = None):
-        """广播消息到聊天会话的所有连接"""
-        if chat_id in self.active_connections:
-            for client_id, websocket in self.active_connections[chat_id].items():
-                if client_id != exclude_client:
-                    await websocket.send_json(message)
-
-# 创建全局聊天管理器实例
-chat_manager = ChatManager()
-
 class ChatService:
     """聊天服务类
     
