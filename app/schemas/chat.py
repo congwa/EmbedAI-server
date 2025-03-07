@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.models.chat import MessageType
 from app.models.enums import ChatMode
 from .base import CustomBaseModel
-
+from pydantic import field_validator
 class ChatMessageBase(BaseModel):
     """聊天消息基础模型"""
     content: str = Field(..., description="消息内容")
@@ -64,6 +64,15 @@ class ChatResponse(CustomBaseModel):
     is_active: bool = Field(..., description="是否活跃")
     messages: Optional[List[ChatMessageResponse]] = Field(default=None, description="会话中的消息列表")
     model_config = ConfigDict(from_attributes=True)
+
+    # messages 期望的是 List[ChatMessageResponse]
+    # 但是数据库中存储的是 List[ChatMessage]
+    # 所以需要进行转换
+    @field_validator("messages", mode="before")
+    def convert_messages(cls, v):
+        if isinstance(v, list) and all(isinstance(msg, ChatMessage) for msg in v):
+            return [ChatMessageResponse.model_validate(msg) for msg in v]
+        return v
 
 class ChatListResponse(CustomBaseModel):
     """聊天会话列表响应模型"""
