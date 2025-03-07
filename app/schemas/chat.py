@@ -17,12 +17,6 @@ class ChatMessageCreate(ChatMessageBase):
     """创建聊天消息的请求模型"""
     pass
 
-class ChatMessageUpdate(ChatMessageBase):
-    """更新聊天消息的请求模型"""
-    content: Optional[str] = Field(None, description="消息内容")
-    message_type: Optional[MessageType] = Field(None, description="消息类型")
-    class Config:
-        from_attributes = True
 
 class ChatMessage(ChatMessageBase):
     """聊天消息响应模型"""
@@ -38,14 +32,6 @@ class ChatBase(BaseModel):
     title: Optional[str] = Field(None, description="会话标题，默认为第一条用户消息")
     knowledge_base_id: int = Field(..., description="知识库ID")
 
-class ChatCreate(ChatBase):
-    """创建聊天会话的请求模型"""
-    third_party_user_id: int = Field(..., description="第三方用户ID")
-
-class ChatUpdate(ChatBase):
-    """更新聊天会话的请求模型"""
-    title: Optional[str] = Field(None, description="会话标题")
-    knowledge_base_id: Optional[int] = Field(None, description="知识库ID")
 
 class Chat(CustomBaseModel):
     """聊天会话响应模型"""

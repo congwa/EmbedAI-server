@@ -26,26 +26,3 @@ class UserContext(BaseModel):
             }
         }
 
-class IdentityInfo(CustomBaseModel):
-    """身份信息"""
-    id: int
-    user_type: UserType
-    user_id: int
-    client_id: str
-    is_active: bool
-    last_active_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-class SessionInfo(CustomBaseModel):
-    """会话信息"""
-    id: int
-    chat_id: int
-    user_identity_id: int
-    client_id: str
-    is_active: bool
-    expires_at: datetime
-    
-    class Config:
-        from_attributes = True 

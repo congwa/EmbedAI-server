@@ -5,9 +5,6 @@ from datetime import datetime
 from app.models.knowledge_base import TrainingStatus, PermissionType
 from .llm import LLMConfig
 
-class KnowledgeBaseBase(CustomBaseModel):
-    """知识库基础模型"""
-    name: str = Field(..., description="知识库名称")
 
 class KnowledgeBaseCreate(BaseModel):
     """创建知识库请求"""
@@ -48,42 +45,6 @@ class KnowledgeBaseUpdate(BaseModel):
     entity_types: Optional[List[str]] = None
     llm_config: Optional[LLMConfig] = None
 
-class KnowledgeBaseInDB(KnowledgeBaseBase):
-    """数据库中的知识库模型"""
-    id: int = Field(..., description="知识库ID")
-    user_id: int = Field(..., description="所属用户ID")
-    is_deleted: bool = Field(False, description="是否已删除")
-    domain: str
-    example_queries: List[str]
-    entity_types: List[str]
-    llm_config: LLMConfig
-    working_dir: str
-    training_status: TrainingStatus
-    training_started_at: Optional[datetime]
-    training_finished_at: Optional[datetime]
-    training_error: Optional[str]
-    queued_at: Optional[datetime]
-
-class KnowledgeBaseResponse(BaseModel):
-    """知识库响应"""
-    id: int
-    name: str
-    domain: str
-    owner_id: int
-    example_queries: Optional[List[str]] = None
-    entity_types: Optional[List[str]] = None
-    llm_config: Optional[LLMConfig] = None
-    working_dir: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    training_status: TrainingStatus
-    training_started_at: Optional[datetime] = None
-    training_finished_at: Optional[datetime] = None
-    training_error: Optional[str] = None
-    queued_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 class QueryRequest(BaseModel):
     """查询请求"""

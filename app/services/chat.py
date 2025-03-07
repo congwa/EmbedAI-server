@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import select, and_, or_, desc
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
-from fastapi import HTTPException, status, WebSocket
+from fastapi import HTTPException, status
 from app.models.chat import Chat, ChatMessage, MessageType
 from app.models.third_party_user import ThirdPartyUser
 from app.models.user import User
