@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, List
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, ConfigDict
 from .base import CustomBaseModel
 from datetime import datetime
 from app.models.knowledge_base import TrainingStatus, PermissionType
@@ -14,8 +14,8 @@ class KnowledgeBaseCreate(BaseModel):
     entity_types: Optional[List[str]] = []
     llm_config: Optional[LLMConfig] = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "测试知识库",
                 "domain": "通用领域",
@@ -36,6 +36,7 @@ class KnowledgeBaseCreate(BaseModel):
                 }
             }
         }
+    )
 
 class KnowledgeBaseUpdate(BaseModel):
     """更新知识库请求"""
@@ -69,9 +70,7 @@ class KnowledgeBasePermission(CustomBaseModel):
     knowledge_base_id: int
     permission: PermissionType
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KnowledgeBase(CustomBaseModel):
     id: int
@@ -90,9 +89,7 @@ class KnowledgeBase(CustomBaseModel):
     training_error: Optional[str]
     queued_at: Optional[datetime]
     members: Optional[List[Dict[str, Any]]] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KnowledgeBaseMemberInfo(CustomBaseModel):
     """知识库成员信息"""
@@ -107,33 +104,32 @@ class KnowledgeBaseMemberCreate(CustomBaseModel):
     """添加知识库成员请求"""
     user_id: int
     permission: PermissionType = PermissionType.VIEWER
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_id": 1,
                 "permission": "viewer"
             }
         }
+    )
 
 class KnowledgeBaseMemberUpdate(CustomBaseModel):
     """更新知识库成员权限请求"""
     permission: PermissionType
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "permission": "editor"
             }
         }
+    )
 
 class KnowledgeBaseMemberList(CustomBaseModel):
     """知识库成员列表响应"""
     members: List[KnowledgeBaseMemberInfo]
     total: int
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "members": [
                     {
@@ -148,3 +144,4 @@ class KnowledgeBaseMemberList(CustomBaseModel):
                 "total": 1
             }
         }
+    )

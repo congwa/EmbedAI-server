@@ -3,6 +3,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 from datetime import datetime
 from app.schemas.base import CustomBaseModel
+from pydantic import ConfigDict
 
 class UserType(str, Enum):
     """用户类型枚举"""
@@ -15,9 +16,8 @@ class UserContext(BaseModel):
     user_id: int
     client_id: str
     identity_id: Optional[int] = None
-    
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "user_type": "third_party",
                 "user_id": 123,
@@ -25,4 +25,5 @@ class UserContext(BaseModel):
                 "identity_id": 456
             }
         }
+    )
 

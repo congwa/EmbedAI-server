@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from app.models.chat import MessageType
 from app.models.enums import ChatMode
 from .base import CustomBaseModel
@@ -10,8 +10,7 @@ class ChatMessageBase(BaseModel):
     content: str = Field(..., description="消息内容")
     message_type: MessageType = Field(..., description="消息类型")
     doc_metadata: Optional[Dict[str, Any]] = Field(None, description="消息元数据，如相关文档引用等")
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatMessageCreate(ChatMessageBase):
     """创建聊天消息的请求模型"""
@@ -23,9 +22,7 @@ class ChatMessage(ChatMessageBase):
     id: int = Field(..., description="消息ID")
     chat_id: int = Field(..., description="所属会话ID")
     created_at: datetime = Field(..., description="创建时间")
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatBase(BaseModel):
     """聊天会话基础模型"""
@@ -40,16 +37,13 @@ class Chat(CustomBaseModel):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     messages: List[ChatMessage] = Field(default_factory=list, description="会话中的消息列表")
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatList(BaseModel):
     """聊天会话列表响应模型"""
     total: int = Field(..., description="总会话数")
     items: List[Chat] = Field(..., description="会话列表")
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatMessageResponse(CustomBaseModel):
     """聊天消息响应模型"""
@@ -58,9 +52,7 @@ class ChatMessageResponse(CustomBaseModel):
     message_type: str = Field(..., description="消息类型")  # 根据实际类型调整
     created_at: datetime = Field(..., description="创建时间") 
     is_read: bool = Field(..., description="是否已读")
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatResponse(CustomBaseModel):
     """聊天会话响应模型"""
@@ -71,16 +63,13 @@ class ChatResponse(CustomBaseModel):
     updated_at: datetime = Field(..., description="更新时间")
     is_active: bool = Field(..., description="是否活跃")
     messages: Optional[List[ChatMessageResponse]] = Field(default=None, description="会话中的消息列表")
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatListResponse(CustomBaseModel):
     """聊天会话列表响应模型"""
     total: int
     items: List[ChatResponse] 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatRequest(BaseModel):
     third_party_user_id: int
