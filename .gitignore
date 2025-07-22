@@ -11,3 +11,5 @@ _*.md
 tests/states/*
 
 workspaces/*
+
+.pytest_cache/*
