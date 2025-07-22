@@ -13,3 +13,5 @@ tests/states/*
 workspaces/*
 
 .pytest_cache/*
+
+logs
