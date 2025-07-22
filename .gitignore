@@ -1,17 +1,23 @@
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Database
 *.db
+
+# Logs
 *.log
+logs/
 
-tests/states/*.json
+# Test files
+tests/states/
 
+# Migration files
 migrations/versions/*.py
 
+# Workspaces
+workspaces/
+
+# Markdown drafts
 _*.md
-
-tests/states/*
-
-workspaces/*
-
-.pytest_cache/*
-
-logs
