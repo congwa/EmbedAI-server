@@ -42,6 +42,7 @@ class Document(Base):
     # 关系定义
     knowledge_base = relationship("KnowledgeBase", back_populates="documents")
     created_by = relationship("User", passive_deletes=True)
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self):
         return f"<Document {self.title}>"

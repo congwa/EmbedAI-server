@@ -29,6 +29,12 @@ class KnowledgeBase(Base):
     llm_config = Column(JSON, nullable=True, comment='LLM配置，包含模型和嵌入等配置信息')
     working_dir = Column(String, nullable=True, comment='工作目录，用于存储知识库相关的文件')
     
+    # RAG相关字段
+    indexing_technique = Column(String, nullable=False, default="high_quality", comment='索引技术（high_quality或economy）')
+    embedding_model = Column(String, nullable=True, comment='嵌入模型名称')
+    embedding_model_provider = Column(String, nullable=True, comment='嵌入模型提供商')
+    vector_store_type = Column(String, nullable=True, comment='向量存储类型')
+    
     # 时间字段
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
