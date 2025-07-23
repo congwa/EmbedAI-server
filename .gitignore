@@ -1,4 +1,5 @@
 # Python
+# Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -22,7 +23,9 @@ workspaces/
 # Markdown drafts
 _*.md
 
-
+# RAG
 _rag
 
-.kiro
+# Allow language preference file
+.kiro/steering/*.md
+!.kiro/steering/language-preference.md
