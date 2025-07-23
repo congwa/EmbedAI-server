@@ -24,6 +24,8 @@ from sqlalchemy.sql import select
 from app.core.logger import Logger
 from app.schemas.identity import UserContext, UserType
 from app.models.identity import UserIdentity
+from app.rag.training.training_manager import RAGTrainingManager
+from app.utils.tasks import train_knowledge_base
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
@@ -118,11 +120,11 @@ class KnowledgeBaseService:
         user_id: int
     ) -> KnowledgeBase:
         """训练知识库"""
-        Logger.info(f"Starting training process for knowledge base {kb_id} requested by user {user_id}")
+        Logger.info(f"开始训练知识库 {kb_id}，请求用户: {user_id}")
         
         # 检查权限
         if not await self.check_permission(kb_id, user_id, PermissionType.EDITOR):
-            Logger.warning(f"Training rejected: User {user_id} has no permission to train knowledge base {kb_id}")
+            Logger.warning(f"训练被拒绝: 用户 {user_id} 没有权限训练知识库 {kb_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="没有足够的权限执行此操作"
@@ -133,7 +135,7 @@ class KnowledgeBaseService:
         )).scalar_one_or_none()
         
         if not kb:
-            Logger.error(f"Training failed: Knowledge base {kb_id} not found")
+            Logger.error(f"训练失败: 知识库 {kb_id} 不存在")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="知识库不存在"
@@ -141,7 +143,7 @@ class KnowledgeBaseService:
 
         # 检查知识库当前状态是否允许训练
         if not kb.can_train:
-            Logger.warning(f"Training rejected: Knowledge base {kb_id} is in {kb.training_status} status")
+            Logger.warning(f"训练被拒绝: 知识库 {kb_id} 状态为 {kb.training_status}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"当前状态({kb.training_status})不允许训练，只有初始状态或训练失败的知识库可以训练"
@@ -149,7 +151,7 @@ class KnowledgeBaseService:
 
         # 检查是否已经在队列中
         if kb.training_status == TrainingStatus.QUEUED:
-            Logger.warning(f"Training rejected: Knowledge base {kb_id} is already in queue")
+            Logger.warning(f"训练被拒绝: 知识库 {kb_id} 已经在队列中")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="知识库已在训练队列中"
@@ -164,13 +166,16 @@ class KnowledgeBaseService:
         )).scalars().all()
 
         if not documents:
-            Logger.error(f"Training failed: No documents available for knowledge base {kb_id}")
+            Logger.error(f"训练失败: 知识库 {kb_id} 没有可用文档")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="没有可用于训练的文档"
             )
 
-        Logger.info(f"Found {len(documents)} documents for training knowledge base {kb_id}")
+        Logger.info(f"找到 {len(documents)} 个文档用于训练知识库 {kb_id}")
+
+        # 创建训练管理器
+        training_manager = RAGTrainingManager(self.db)
 
         # 检查是否启用训练队列
         if settings.ENABLE_TRAINING_QUEUE:
@@ -182,41 +187,20 @@ class KnowledgeBaseService:
             )).scalar_one_or_none()
 
             if training_kb:
-                # 如果有其他知识库在训练，将当前知识库设置为排队状态
-                Logger.info(f"Another knowledge base is training, queuing knowledge base {kb_id}")
-                kb.training_status = TrainingStatus.QUEUED
-                kb.queued_at = datetime.now()
-                kb.training_error = None  # 清除之前的错误信息
-                await self.db.commit()
+                # 如果有其他知识库在训练，将当前知识库添加到队列
+                Logger.info(f"另一个知识库正在训练，将知识库 {kb_id} 加入队列")
+                await training_manager.add_to_queue(kb_id)
                 await self.db.refresh(kb)
                 return kb
 
         # 如果没有其他知识库在训练，直接开始训练
-        Logger.info(f"Starting immediate training for knowledge base {kb_id}")
-        kb.training_status = TrainingStatus.TRAINING
-        kb.training_started_at = datetime.now()
-        kb.training_error = None
-        kb.queued_at = None
-        await self.db.commit()
+        Logger.info(f"开始立即训练知识库 {kb_id}")
+        await training_manager.update_training_status(kb_id, TrainingStatus.TRAINING)
+        
+        # 启动异步训练任务
+        train_knowledge_base(kb_id)
+        
         await self.db.refresh(kb)
-
-        try:
-            # 启动异步训练任务
-            from app.utils.tasks import train_knowledge_base
-            train_knowledge_base(kb_id)
-            Logger.info(f"Training task scheduled successfully for knowledge base {kb_id}")
-        except Exception as e:
-            Logger.error(f"Failed to schedule training task for knowledge base {kb_id}: {str(e)}")
-            # 如果任务调度失败，更新知识库状态
-            kb.training_status = TrainingStatus.FAILED
-            kb.training_error = f"训练任务调度失败: {str(e)}"
-            await self.db.commit()
-            await self.db.refresh(kb)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="训练任务启动失败"
-            )
-
         return kb
 
     async def query(

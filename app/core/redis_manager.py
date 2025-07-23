@@ -221,7 +221,7 @@ class RedisManager:
     
     # ========== 任务队列管理 ==========
     @classmethod
-    async def add_to_training_queue(cls, kb_id: int) -> bool:
+    async def add_training_task(cls, kb_id: int) -> bool:
         """添加知识库到训练队列"""
         redis = await cls.get_redis()
         key = "training_queue"
