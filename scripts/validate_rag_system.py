@@ -213,9 +213,9 @@ class RAGSystemValidator:
             # 创建测试LLM配置
             llm_config = LLMConfig(
                 embeddings={
-                    "provider": "huggingface",
-                    "model": "sentence-transformers/all-MiniLM-L6-v2",
-                    "device": "cpu",
+                    "provider": "openai",
+                    "model": "text-embedding-ada-002",
+                    "api_key": "your-api-key",
                     "batch_size": 10
                 }
             )
@@ -381,8 +381,9 @@ class RAGSystemValidator:
                 # 创建简单的LLM配置用于测试
                 llm_config = LLMConfig(
                     embeddings={
-                        "provider": "huggingface",
-                        "model": "sentence-transformers/all-MiniLM-L6-v2",
+                        "provider": "openai",
+                        "model": "text-embedding-ada-002",
+                        "api_key": "your-api-key",
                         "device": "cpu"
                     }
                 )
@@ -467,9 +468,9 @@ class RAGSystemValidator:
             # 测试向量化性能
             llm_config = LLMConfig(
                 embeddings={
-                    "provider": "huggingface",
-                    "model": "sentence-transformers/all-MiniLM-L6-v2",
-                    "device": "cpu",
+                    "provider": "openai",
+                    "model": "text-embedding-ada-002",
+                    "api_key": "your-api-key",
                     "batch_size": 10
                 }
             )

@@ -142,12 +142,6 @@ embedding_config = {
     "batch_size": 100
 }
 
-# 本地模型
-embedding_config = {
-    "provider": "huggingface",
-    "model": "sentence-transformers/all-MiniLM-L6-v2",
-    "batch_size": 50
-}
 ```
 
 ### 向量存储配置

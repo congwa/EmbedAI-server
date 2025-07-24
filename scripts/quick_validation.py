@@ -75,9 +75,9 @@ async def quick_health_check():
         
         llm_config = LLMConfig(
             embeddings={
-                "provider": "huggingface",
-                "model": "sentence-transformers/all-MiniLM-L6-v2",
-                "device": "cpu"
+                "provider": "openai",
+                "model": "text-embedding-ada-002",
+                "api_key": "your-api-key"
             }
         )
         

@@ -328,20 +328,6 @@ def create_llm_config():
     
     return llm_config
 
-# 本地模型配置示例
-def create_local_llm_config():
-    """创建本地LLM配置"""
-    llm_config = LLMConfig(
-        embeddings={
-            "provider": "huggingface",
-            "model": "sentence-transformers/all-MiniLM-L6-v2",
-            "device": "cpu",
-            "batch_size": 50
-        }
-    )
-    
-    return llm_config
-```
 
 #### 4.2 验证LLM配置
 

@@ -16,7 +16,7 @@
 #### 2. 核心RAG组件
 - **文档处理模块**: 支持PDF、Word、Excel、Markdown、HTML、TXT等多种格式
 - **文本分块模块**: 实现递归字符分块、固定长度分块等多种策略
-- **向量化模块**: 支持OpenAI、HuggingFace等多种向量化服务
+- **向量化模块**: 支持OpenAI等多种向量化服务
 - **向量存储模块**: 支持Chroma、Qdrant等向量数据库
 - **索引构建模块**: 高效的向量索引构建和管理
 - **检索模块**: 语义搜索、关键词搜索、混合搜索
@@ -68,7 +68,7 @@ RAG知识库训练系统
 │   └── 向量缓存机制
 ├── 存储层
 │   ├── 向量数据库 (Chroma/Qdrant)
-│   ├── 关系数据库 (PostgreSQL/SQLite)
+│   ├── 关系数据库 (SQLite)
 │   └── 缓存系统 (Redis)
 ├── 检索层
 │   ├── 语义搜索引擎
@@ -85,9 +85,9 @@ RAG知识库训练系统
 ### 核心技术栈
 
 - **后端框架**: FastAPI + SQLAlchemy
-- **数据库**: PostgreSQL/SQLite + Redis
+- **数据库**: SQLite + Redis
 - **向量数据库**: Chroma/Qdrant
-- **向量化**: OpenAI Embeddings/HuggingFace
+- **向量化**: OpenAI Embeddings
 - **异步任务**: Huey
 - **缓存**: Redis
 - **测试**: pytest

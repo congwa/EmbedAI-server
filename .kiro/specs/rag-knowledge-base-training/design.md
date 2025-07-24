@@ -635,7 +635,7 @@ async def process_documents(self, documents: List[Document], max_concurrency: in
    - 存储：根据知识库大小，至少10GB
    
 2. **依赖服务**：
-   - 数据库：SQLite/PostgreSQL
+   - 数据库：SQLite
    - Redis：用于缓存
    - 向量数据库：根据配置选择（Chroma、Qdrant等）
    
