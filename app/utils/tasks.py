@@ -39,6 +39,29 @@ def train_knowledge_base(kb_id: int):
                 # 执行训练
                 result = await training_manager.train(kb_id)
                 
+                # 创建审计管理器
+                from app.services.audit import AuditManager
+                from app.schemas.identity import UserContext, UserType
+                
+                audit_manager = AuditManager(db)
+                
+                # 创建系统用户上下文
+                system_context = UserContext(
+                    user_type=UserType.SYSTEM,
+                    user_id=0,
+                    identity_id=None,
+                    client_id=None
+                )
+                
+                # 计算训练时间
+                kb = (await db.execute(
+                    select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+                )).scalar_one_or_none()
+                
+                training_duration = None
+                if kb and kb.training_started_at:
+                    training_duration = (datetime.now() - kb.training_started_at).total_seconds()
+                
                 if not result.success:
                     Logger.error(f"训练知识库 {kb_id} 失败: {result.error_message}")
                     # 更新知识库状态
@@ -47,9 +70,32 @@ def train_knowledge_base(kb_id: int):
                         TrainingStatus.FAILED, 
                         result.error_message
                     )
+                    
+                    # 记录审计日志
+                    await audit_manager.log_training(
+                        user_context=system_context,
+                        kb_id=kb_id,
+                        status="failed",
+                        document_count=result.document_count,
+                        chunk_count=result.chunk_count,
+                        embedding_count=result.embedding_count,
+                        duration=training_duration,
+                        error=result.error_message
+                    )
                 else:
                     Logger.info(f"知识库 {kb_id} 训练成功，处理了 {result.document_count} 个文档，"
                                f"生成了 {result.chunk_count} 个分块和 {result.embedding_count} 个向量")
+                    
+                    # 记录审计日志
+                    await audit_manager.log_training(
+                        user_context=system_context,
+                        kb_id=kb_id,
+                        status="completed",
+                        document_count=result.document_count,
+                        chunk_count=result.chunk_count,
+                        embedding_count=result.embedding_count,
+                        duration=training_duration
+                    )
                     
             except Exception as e:
                 Logger.error(f"训练知识库 {kb_id} 时发生意外错误: {str(e)}")

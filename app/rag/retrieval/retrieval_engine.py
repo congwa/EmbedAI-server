@@ -314,39 +314,49 @@ class RetrievalEngine:
                 return documents[:top_k]
                 
             # 创建权重配置
-            weights = Weights(
-                vector_setting=VectorSetting(
-                    vector_weight=0.7,
-                    model_name=self.llm_config.embeddings.model_name,
-                    model_provider=self.llm_config.embeddings.model_provider
-                ),
-                keyword_setting=KeywordSetting(
-                    keyword_weight=0.3,
-                    k1=1.5,
-                    b=0.75
-                )
+            weights = RerankRunnerFactory.get_default_weights(
+                model_name=self.llm_config.embeddings.model_name,
+                model_provider=self.llm_config.embeddings.model_provider
             )
             
             # 创建重排序运行器
-            rerank_runner = RerankRunnerFactory.create_rerank_runner(
-                rerank_mode=self.rerank_mode,
-                user_id=self.user_id,
-                model_instance=self.rerank_model_instance,
-                weights=weights,
-                embedding_engine=self.embedding_engine
-            )
+            try:
+                rerank_runner = RerankRunnerFactory.create_rerank_runner(
+                    rerank_mode=self.rerank_mode,
+                    user_id=self.user_id,
+                    model_instance=self.rerank_model_instance,
+                    weights=weights,
+                    embedding_engine=self.embedding_engine
+                )
+            except Exception as e:
+                Logger.error(f"创建重排序运行器失败: {str(e)}")
+                raise RerankException(
+                    message=f"创建重排序运行器失败: {str(e)}",
+                    rerank_mode=self.rerank_mode
+                )
             
             # 执行重排序
-            reranked_documents = await rerank_runner.run(
-                query=query,
-                documents=documents,
-                score_threshold=score_threshold,
-                top_n=top_k,
-                user_id=self.user_id
-            )
+            try:
+                reranked_documents = await rerank_runner.run(
+                    query=query,
+                    documents=documents,
+                    score_threshold=score_threshold,
+                    top_n=top_k,
+                    user_id=self.user_id
+                )
+                
+                return reranked_documents
+            except Exception as e:
+                Logger.error(f"执行重排序失败: {str(e)}")
+                raise RerankException(
+                    message=f"执行重排序失败: {str(e)}",
+                    rerank_mode=self.rerank_mode
+                )
             
-            return reranked_documents
-            
+        except RerankException:
+            # 重新抛出已经处理过的重排序异常
+            Logger.warning(f"重排序失败，使用原始结果")
+            return documents[:top_k]
         except Exception as e:
             Logger.error(f"重排序失败: {str(e)}")
             return documents[:top_k]
@@ -384,22 +394,35 @@ class RetrievalEngine:
             self.configure_rerank(use_rerank, rerank_mode, rerank_model_instance, user_id)
             
             # 根据检索方法选择检索函数
-            if method == RetrievalMethod.SEMANTIC_SEARCH:
-                results = await self.semantic_search(knowledge_base, query, top_k, **kwargs)
-            elif method == RetrievalMethod.KEYWORD_SEARCH:
-                results = await self.keyword_search(knowledge_base, query, top_k, **kwargs)
-            elif method == RetrievalMethod.HYBRID_SEARCH:
-                results = await self.hybrid_search(knowledge_base, query, top_k, **kwargs)
-            else:
-                Logger.warning(f"未知的检索方法: {method}，使用语义搜索")
-                results = await self.semantic_search(knowledge_base, query, top_k, **kwargs)
+            try:
+                if method == RetrievalMethod.SEMANTIC_SEARCH:
+                    results = await self.semantic_search(knowledge_base, query, top_k, **kwargs)
+                elif method == RetrievalMethod.KEYWORD_SEARCH:
+                    results = await self.keyword_search(knowledge_base, query, top_k, **kwargs)
+                elif method == RetrievalMethod.HYBRID_SEARCH:
+                    results = await self.hybrid_search(knowledge_base, query, top_k, **kwargs)
+                else:
+                    Logger.warning(f"未知的检索方法: {method}，使用语义搜索")
+                    results = await self.semantic_search(knowledge_base, query, top_k, **kwargs)
+            except RetrievalException as e:
+                Logger.error(f"检索失败: {e.message}")
+                # 如果检索失败，返回空结果
+                return []
             
             # 如果启用重排序，执行重排序
             if self.use_rerank and results:
-                results = await self.rerank_results(query, results, top_k, kwargs.get("score_threshold"))
+                try:
+                    results = await self.rerank_results(query, results, top_k, kwargs.get("score_threshold"))
+                except RerankException as e:
+                    Logger.warning(f"重排序失败: {e.message}，使用原始结果")
+                    # 如果重排序失败，使用原始结果
+                    results = results[:top_k]
                 
             return results
                 
         except Exception as e:
             Logger.error(f"搜索失败: {str(e)}")
+            # 记录详细错误信息
+            import traceback
+            Logger.debug(f"搜索失败详细信息: {traceback.format_exc()}")
             return []

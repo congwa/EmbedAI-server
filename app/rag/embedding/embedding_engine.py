@@ -22,8 +22,26 @@ class EmbeddingEngine:
         self.llm_config = llm_config
         self.embedding_service = CacheEmbedding(llm_config)
         
-    async def embed_documents(self, documents: List[Document]) -> List[Document]:
-        """向量化文档
+    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """向量化文本
+        
+        Args:
+            texts: 文本列表
+            
+        Returns:
+            List[List[float]]: 向量列表
+        """
+        try:
+            # 向量化
+            embeddings = await self.embedding_service.embed_documents(texts)
+            return embeddings
+            
+        except Exception as e:
+            Logger.error(f"向量化文本失败: {str(e)}")
+            raise
+            
+    async def embed_document_objects(self, documents: List[Document]) -> List[Document]:
+        """向量化文档对象
         
         Args:
             documents: 文档列表
@@ -36,7 +54,7 @@ class EmbeddingEngine:
             texts = [doc.page_content for doc in documents]
             
             # 向量化
-            embeddings = await self.embedding_service.embed_documents(texts)
+            embeddings = await self.embed_documents(texts)
             
             # 更新文档对象
             for doc, embedding in zip(documents, embeddings):
@@ -45,7 +63,7 @@ class EmbeddingEngine:
             return documents
             
         except Exception as e:
-            Logger.error(f"向量化文档失败: {str(e)}")
+            Logger.error(f"向量化文档对象失败: {str(e)}")
             raise
             
     async def embed_query(self, query: str) -> List[float]:
@@ -63,6 +81,34 @@ class EmbeddingEngine:
             Logger.error(f"向量化查询失败: {str(e)}")
             raise
             
+    async def batch_embed_texts(
+        self, texts: List[str], batch_size: int = 100
+    ) -> List[List[float]]:
+        """批量向量化文本
+        
+        Args:
+            texts: 文本列表
+            batch_size: 批处理大小
+            
+        Returns:
+            List[List[float]]: 向量列表
+        """
+        try:
+            all_embeddings = []
+            
+            # 分批处理
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i+batch_size]
+                batch_embeddings = await self.embed_documents(batch)
+                all_embeddings.extend(batch_embeddings)
+                Logger.info(f"已向量化 {i+len(batch)}/{len(texts)} 个文本")
+                
+            return all_embeddings
+            
+        except Exception as e:
+            Logger.error(f"批量向量化文本失败: {str(e)}")
+            raise
+            
     async def batch_embed_documents(
         self, documents: List[Document], batch_size: int = 100
     ) -> List[Document]:
@@ -76,11 +122,15 @@ class EmbeddingEngine:
             List[Document]: 向量化后的文档列表
         """
         try:
-            # 分批处理
-            for i in range(0, len(documents), batch_size):
-                batch = documents[i:i+batch_size]
-                await self.embed_documents(batch)
-                Logger.info(f"已向量化 {i+len(batch)}/{len(documents)} 个文档")
+            # 提取文本内容
+            texts = [doc.page_content for doc in documents]
+            
+            # 批量向量化
+            embeddings = await self.batch_embed_texts(texts, batch_size)
+            
+            # 更新文档对象
+            for doc, embedding in zip(documents, embeddings):
+                doc.vector = embedding
                 
             return documents
             

@@ -1,6 +1,7 @@
 """标准索引处理器"""
 from typing import List, Dict, Any, Optional
 import uuid
+import json
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.document_embedding import DocumentEmbedding
 from app.rag.models.document import Document
 from app.rag.index_processor.index_processor_base import BaseIndexProcessor
+from app.rag.index_processor.index_cache import IndexCache
 from app.rag.extractor.extract_processor import ExtractProcessor
 from app.rag.cleaner.clean_processor import TextCleaner
 from app.rag.splitter.recursive_character_text_splitter import RecursiveCharacterTextSplitter
@@ -164,6 +166,18 @@ class StandardIndexProcessor(BaseIndexProcessor):
             # 提交事务
             await db.commit()
             
+            # 使缓存失效
+            document_id = documents[0].metadata.get("document_id") if documents else None
+            if document_id:
+                await IndexCache.invalidate_index(
+                    kb_id=knowledge_base.id,
+                    index_type="standard_retrieval",
+                    document_id=int(document_id)
+                )
+            else:
+                # 如果没有文档ID，使所有缓存失效
+                await IndexCache.invalidate_all_indexes(knowledge_base.id)
+            
         except Exception as e:
             Logger.error(f"加载文档到索引失败: {str(e)}")
             raise
@@ -202,6 +216,14 @@ class StandardIndexProcessor(BaseIndexProcessor):
                 )
                 for chunk in chunks.scalars().all():
                     await db.delete(chunk)
+                    
+                # 使缓存失效
+                for doc_id in document_ids:
+                    await IndexCache.invalidate_index(
+                        kb_id=knowledge_base.id,
+                        index_type="standard_retrieval",
+                        document_id=int(doc_id)
+                    )
             else:
                 # 删除整个索引
                 await vector_store.delete()
@@ -217,6 +239,9 @@ class StandardIndexProcessor(BaseIndexProcessor):
                 )
                 for chunk in chunks.scalars().all():
                     await db.delete(chunk)
+                    
+                # 使所有缓存失效
+                await IndexCache.invalidate_all_indexes(knowledge_base.id)
                     
             # 提交事务
             await db.commit()
@@ -244,6 +269,34 @@ class StandardIndexProcessor(BaseIndexProcessor):
             List[Document]: 检索结果
         """
         try:
+            # 检查是否使用缓存
+            use_cache = kwargs.get("use_cache", True)
+            
+            # 生成缓存键
+            cache_key = f"{query}_{top_k}"
+            
+            # 检查缓存
+            if use_cache:
+                cached_results = await IndexCache.get_cached_index(
+                    kb_id=knowledge_base.id,
+                    index_type="standard_retrieval",
+                    document_id=hash(cache_key)
+                )
+                
+                if cached_results:
+                    Logger.info(f"使用缓存的检索结果: {query[:50]}...")
+                    # 反序列化文档
+                    documents = []
+                    for doc_data in cached_results["documents"]:
+                        doc = Document(
+                            page_content=doc_data["page_content"],
+                            metadata=doc_data["metadata"]
+                        )
+                        if "vector" in doc_data:
+                            doc.vector = doc_data["vector"]
+                        documents.append(doc)
+                    return documents
+            
             # 获取LLM配置
             llm_config: LLMConfig = kwargs.get("llm_config")
             if not llm_config:
@@ -264,6 +317,27 @@ class StandardIndexProcessor(BaseIndexProcessor):
                 top_k=top_k,
                 **kwargs
             )
+            
+            # 缓存结果
+            if use_cache:
+                # 序列化文档
+                doc_data = []
+                for doc in results:
+                    doc_dict = {
+                        "page_content": doc.page_content,
+                        "metadata": doc.metadata
+                    }
+                    if doc.vector:
+                        doc_dict["vector"] = doc.vector
+                    doc_data.append(doc_dict)
+                
+                # 缓存
+                await IndexCache.cache_index(
+                    kb_id=knowledge_base.id,
+                    index_type="standard_retrieval",
+                    index_data={"documents": doc_data},
+                    document_id=hash(cache_key)
+                )
             
             return results
             

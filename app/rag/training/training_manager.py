@@ -251,10 +251,23 @@ class RAGTrainingManager:
                             knowledge_base_id=knowledge_base.id
                         )
                     
-                    # 向量化分块
+                    # 向量化分块（批处理）
                     try:
                         chunk_texts = [chunk.content for chunk in db_chunks]
-                        embeddings = await embedding_engine.embed_documents(chunk_texts)
+                        
+                        # 从配置中获取批处理大小
+                        from app.core.config import settings
+                        batch_size = getattr(settings, 'RAG_BATCH_SIZE', 100)
+                        
+                        # 批量向量化
+                        all_embeddings = []
+                        for i in range(0, len(chunk_texts), batch_size):
+                            batch_texts = chunk_texts[i:i+batch_size]
+                            batch_embeddings = await embedding_engine.embed_documents(batch_texts)
+                            all_embeddings.extend(batch_embeddings)
+                            Logger.info(f"向量化批次 {i//batch_size + 1}/{(len(chunk_texts) + batch_size - 1)//batch_size} 完成")
+                        
+                        embeddings = all_embeddings
                         
                         if len(embeddings) != len(chunk_texts):
                             raise EmbeddingException(
@@ -269,8 +282,9 @@ class RAGTrainingManager:
                             )
                         raise
                     
-                    # 存储向量
+                    # 批量存储向量
                     try:
+                        embedding_objects = []
                         for chunk, embedding in zip(db_chunks, embeddings):
                             # 创建向量记录
                             doc_embedding = DocumentEmbedding(
@@ -278,8 +292,11 @@ class RAGTrainingManager:
                                 embedding=embedding,
                                 model=llm_config.embeddings.model_name
                             )
-                            self.db.add(doc_embedding)
+                            embedding_objects.append(doc_embedding)
                             embedding_count += 1
+                        
+                        # 批量添加
+                        self.db.add_all(embedding_objects)
                             
                         # 提交向量
                         await self.db.commit()

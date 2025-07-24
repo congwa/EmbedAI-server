@@ -19,11 +19,16 @@ class AuditManager:
         kb_id: int,
         query: str,
         status: str,
+        method: Optional[str] = None,
+        use_rerank: Optional[bool] = None,
+        rerank_mode: Optional[str] = None,
+        top_k: Optional[int] = None,
+        result_count: Optional[int] = None,
         error: Optional[str] = None
     ) -> None:
         """记录查询操作日志"""
         audit_log = {
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now().isoformat(),
             "operation": "knowledge_base_query",
             "user_type": user_context.user_type,
             "user_id": user_context.user_id,
@@ -39,6 +44,17 @@ class AuditManager:
             }
         }
         
+        # 添加RAG相关信息
+        if method:
+            audit_log["details"]["method"] = method
+        if use_rerank is not None:
+            audit_log["details"]["use_rerank"] = use_rerank
+        if rerank_mode:
+            audit_log["details"]["rerank_mode"] = rerank_mode
+        if top_k:
+            audit_log["details"]["top_k"] = top_k
+        if result_count is not None:
+            audit_log["details"]["result_count"] = result_count
         if error:
             audit_log["details"]["error"] = error
             
@@ -63,7 +79,7 @@ class AuditManager:
     ) -> None:
         """记录一般操作日志"""
         audit_log = {
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now().isoformat(),
             "operation": operation,
             "user_type": user_context.user_type,
             "user_id": user_context.user_id,
@@ -87,6 +103,42 @@ class AuditManager:
         # TODO: 异步保存到持久化存储
         Logger.info(f"Audit log created for {operation}: {audit_log}")
         
+    async def log_training(
+        self,
+        user_context: UserContext,
+        kb_id: int,
+        status: str,
+        document_count: Optional[int] = None,
+        chunk_count: Optional[int] = None,
+        embedding_count: Optional[int] = None,
+        duration: Optional[float] = None,
+        error: Optional[str] = None
+    ) -> None:
+        """记录训练操作日志"""
+        details = {
+            "status": status
+        }
+        
+        if document_count is not None:
+            details["document_count"] = document_count
+        if chunk_count is not None:
+            details["chunk_count"] = chunk_count
+        if embedding_count is not None:
+            details["embedding_count"] = embedding_count
+        if duration is not None:
+            details["duration_seconds"] = duration
+        if error:
+            details["error"] = error
+            
+        await self.log_operation(
+            user_context=user_context,
+            operation="knowledge_base_training",
+            resource_type="knowledge_base",
+            resource_id=kb_id,
+            status=status,
+            details=details
+        )
+    
     async def get_user_operations(
         self,
         user_context: UserContext,

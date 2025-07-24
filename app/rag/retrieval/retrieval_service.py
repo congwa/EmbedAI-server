@@ -1,5 +1,6 @@
 """检索服务"""
 from typing import List, Dict, Any, Optional, Tuple
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,7 @@ from app.rag.models.document import Document
 from app.rag.retrieval.retrieval_methods import RetrievalMethod
 from app.rag.retrieval.retrieval_engine import RetrievalEngine
 from app.rag.rerank.rerank_type import RerankMode
+from app.rag.retrieval.query_cache import QueryCache
 
 class RetrievalService:
     """检索服务
@@ -37,6 +39,7 @@ class RetrievalService:
         use_rerank: bool = False,
         rerank_mode: str = RerankMode.WEIGHTED_SCORE,
         user_id: Optional[str] = None,
+        use_cache: bool = True,
         **kwargs
     ) -> List[Dict[str, Any]]:
         """查询知识库
@@ -50,12 +53,28 @@ class RetrievalService:
             use_rerank: 是否使用重排序
             rerank_mode: 重排序模式
             user_id: 用户ID
+            use_cache: 是否使用缓存
             **kwargs: 其他参数
             
         Returns:
             List[Dict[str, Any]]: 检索结果
         """
         try:
+            # 检查缓存
+            if use_cache:
+                cached_results = await QueryCache.get_cached_result(
+                    kb_id=knowledge_base.id,
+                    query=query,
+                    method=method,
+                    top_k=top_k,
+                    use_rerank=use_rerank,
+                    rerank_mode=rerank_mode if use_rerank else None
+                )
+                
+                if cached_results:
+                    Logger.info(f"使用缓存的查询结果: {query[:50]}...")
+                    return cached_results
+            
             # 创建检索引擎
             retrieval_engine = RetrievalEngine(self.db, llm_config)
             
@@ -73,6 +92,19 @@ class RetrievalService:
             
             # 格式化结果
             formatted_results = await self._format_results(results)
+            
+            # 缓存结果
+            if use_cache:
+                await QueryCache.cache_result(
+                    kb_id=knowledge_base.id,
+                    query=query,
+                    method=method,
+                    top_k=top_k,
+                    use_rerank=use_rerank,
+                    rerank_mode=rerank_mode if use_rerank else None,
+                    results=formatted_results,
+                    expire=timedelta(hours=1)
+                )
             
             return formatted_results
             
