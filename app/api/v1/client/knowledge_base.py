@@ -8,7 +8,9 @@ from app.schemas.knowledge_base import QueryRequest, QueryResponse
 from app.schemas.identity import UserContext, UserType
 from app.core.logger import Logger
 from app.core.response import ResponseModel, APIResponse
-router = APIRouter(prefix="/chat", tags=["client-chat"])
+
+# 移除前缀，因为已在__init__.py中设置
+router = APIRouter()
 
 @router.post("/{kb_id}/query", response_model=ResponseModel[QueryResponse])
 async def query_knowledge_base(

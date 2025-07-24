@@ -9,7 +9,6 @@ from app.schemas.chat import ChatList
 from app.core.logger import Logger
 from sqlalchemy.orm import Session
 from app.core.response import APIResponse, ResponseModel
-from app.services.auth import get_current_admin_user
 from app.models.enums import ChatMode, MessageType
 from app.schemas.chat import (
     ChatResponse,
@@ -18,7 +17,8 @@ from app.schemas.chat import (
     ChatListResponse
 )
 
-router = APIRouter(prefix="/admin/chats", tags=["admin-chat"])
+# 创建管理员聊天路由
+router = APIRouter()
 
 @router.get("/", response_model=ResponseModel[List[ChatListResponse]])
 async def list_chats(
@@ -110,7 +110,7 @@ async def send_admin_message(
         content=message.content,
         message_type=MessageType.ADMIN,
         sender_id=current_admin.id,
-        metadata=message.metadata
+        doc_metadata=message.metadata
     )
     
     return APIResponse.success(data=chat_message)
@@ -128,15 +128,15 @@ async def list_chat_messages(
     chat = await chat_service.get_chat(chat_id)
     
     # 获取消息列表
-    messages = await chat_service.list_messages(
+    messages, total = await chat_service.list_messages(
         chat_id=chat_id,
-        skip=skip,
-        limit=limit
+        page=(skip // limit) + 1,
+        page_size=limit
     )
     
     return APIResponse.success(data=messages)
 
-@router.get("/users/{third_party_user_id}/stats", response_model=ResponseModel[ChatStats])
+@router.get("/users/{third_party_user_id}/stats", response_model=ResponseModel)
 async def get_user_chat_stats(
     third_party_user_id: int,
     current_admin: User = Depends(get_current_admin_user),
@@ -155,7 +155,7 @@ async def get_user_chat_stats(
     )
     
     total_chats = len(chats)
-    total_messages = sum(len(chat.messages) for chat in chats)
+    total_messages = sum(len(chat.messages) for chat in chats if hasattr(chat, 'messages') and chat.messages)
     
     return APIResponse.success(data={
         "third_party_user_id": third_party_user_id,
