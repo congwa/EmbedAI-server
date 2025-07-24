@@ -10,6 +10,7 @@ from app.rag.rerank.rerank_base import BaseRerankRunner
 from app.rag.rerank.entity.weight import Weights, VectorSetting
 from app.rag.keyword.jieba_keyword_handler import JiebaKeywordHandler
 from app.rag.embedding.cached_embedding import CacheEmbedding
+from app.core.logger import Logger
 
 
 class WeightRerankRunner(BaseRerankRunner):
@@ -29,14 +30,14 @@ class WeightRerankRunner(BaseRerankRunner):
         self.embedding_engine = embedding_engine
         self.keyword_handler = JiebaKeywordHandler()
     
-    def run(
+    async def run(
         self,
         query: str,
-        documents: list[Document],
+        documents: List[Document],
         score_threshold: Optional[float] = None,
         top_n: Optional[int] = None,
         user_id: Optional[str] = None,
-    ) -> list[Document]:
+    ) -> List[Document]:
         """
         运行重排序
         
@@ -63,11 +64,16 @@ class WeightRerankRunner(BaseRerankRunner):
         
         documents = unique_documents
         
-        # 计算关键词分数
-        keyword_scores = self._calculate_keyword_score(query, documents)
-        
-        # 计算向量相似度分数
-        vector_scores = self._calculate_vector_similarity(query, documents, self.weights.vector_setting)
+        try:
+            # 计算关键词分数
+            keyword_scores = self._calculate_keyword_score(query, documents)
+            
+            # 计算向量相似度分数
+            vector_scores = await self._calculate_vector_similarity(query, documents, self.weights.vector_setting)
+        except Exception as e:
+            Logger.error(f"计算重排序分数失败: {str(e)}")
+            # 如果计算失败，返回原始文档
+            return documents[:top_n] if top_n else documents
         
         # 组合分数
         rerank_documents = []

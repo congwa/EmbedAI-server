@@ -11,6 +11,7 @@ from app.models.document_chunk import DocumentChunk
 from app.rag.models.document import Document
 from app.rag.retrieval.retrieval_methods import RetrievalMethod
 from app.rag.retrieval.retrieval_engine import RetrievalEngine
+from app.rag.rerank.rerank_type import RerankMode
 
 class RetrievalService:
     """检索服务
@@ -33,6 +34,9 @@ class RetrievalService:
         llm_config: LLMConfig,
         method: str = RetrievalMethod.SEMANTIC_SEARCH,
         top_k: int = 5,
+        use_rerank: bool = False,
+        rerank_mode: str = RerankMode.WEIGHTED_SCORE,
+        user_id: Optional[str] = None,
         **kwargs
     ) -> List[Dict[str, Any]]:
         """查询知识库
@@ -43,6 +47,9 @@ class RetrievalService:
             llm_config: LLM配置
             method: 检索方法
             top_k: 返回结果数量
+            use_rerank: 是否使用重排序
+            rerank_mode: 重排序模式
+            user_id: 用户ID
             **kwargs: 其他参数
             
         Returns:
@@ -58,6 +65,9 @@ class RetrievalService:
                 query=query,
                 method=method,
                 top_k=top_k,
+                use_rerank=use_rerank,
+                rerank_mode=rerank_mode,
+                user_id=user_id,
                 **kwargs
             )
             

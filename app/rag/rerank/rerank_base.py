@@ -1,6 +1,6 @@
 """重排序基类"""
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 
 from app.rag.models.document import Document
 
@@ -9,14 +9,14 @@ class BaseRerankRunner(ABC):
     """重排序运行器基类"""
     
     @abstractmethod
-    def run(
+    async def run(
         self,
         query: str,
-        documents: list[Document],
+        documents: List[Document],
         score_threshold: Optional[float] = None,
         top_n: Optional[int] = None,
         user_id: Optional[str] = None,
-    ) -> list[Document]:
+    ) -> List[Document]:
         """
         运行重排序
         

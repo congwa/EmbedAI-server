@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any, List
 
 from app.rag.models.document import Document
 from app.rag.rerank.rerank_base import BaseRerankRunner
+from app.core.logger import Logger
 
 
 class RerankModelRunner(BaseRerankRunner):
@@ -17,14 +18,14 @@ class RerankModelRunner(BaseRerankRunner):
         """
         self.model_instance = model_instance
     
-    def run(
+    async def run(
         self,
         query: str,
-        documents: list[Document],
+        documents: List[Document],
         score_threshold: Optional[float] = None,
         top_n: Optional[int] = None,
         user_id: Optional[str] = None,
-    ) -> list[Document]:
+    ) -> List[Document]:
         """
         运行重排序
         
@@ -57,14 +58,19 @@ class RerankModelRunner(BaseRerankRunner):
         
         documents = unique_documents
         
-        # 调用重排序模型
-        rerank_result = self.model_instance.invoke_rerank(
-            query=query, 
-            docs=docs, 
-            score_threshold=score_threshold, 
-            top_n=top_n, 
-            user=user_id
-        )
+        try:
+            # 调用重排序模型
+            rerank_result = await self.model_instance.invoke_rerank(
+                query=query, 
+                docs=docs, 
+                score_threshold=score_threshold, 
+                top_n=top_n, 
+                user=user_id
+            )
+        except Exception as e:
+            Logger.error(f"调用重排序模型失败: {str(e)}")
+            # 如果调用失败，返回原始文档
+            return documents[:top_n] if top_n else documents
         
         # 处理重排序结果
         rerank_documents = []

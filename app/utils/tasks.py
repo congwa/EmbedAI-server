@@ -1,5 +1,3 @@
-import crontab
-from huey import RedisHuey
 from datetime import datetime, timedelta
 from app.models.knowledge_base import KnowledgeBase, TrainingStatus
 from app.models.document import Document
@@ -8,10 +6,9 @@ from app.models.database import AsyncSessionLocal
 from sqlalchemy import select
 from app.core.logger import Logger
 from app.core.redis_manager import redis_manager
-from app.rag.training.training_manager import RAGTrainingManager
-from app.rag.training.training_status import TrainingResult, TrainingError
+from app.rag.training.training_manager import RAGTrainingManager, TrainingResult
 
-# 修改为从huey导入crontab
+# 从huey导入crontab
 from huey import crontab
 from huey import RedisHuey
 

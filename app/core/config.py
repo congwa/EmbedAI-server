@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     
     # 训练配置
     ENABLE_TRAINING_QUEUE: bool = True  # 是否启用训练队列（同一时间只允许一个知识库训练）
+    
+    # RAG配置
+    RAG_CHUNK_SIZE: int = 1000  # 文本分块大小
+    RAG_CHUNK_OVERLAP: int = 200  # 文本分块重叠大小
+    RAG_VECTOR_STORE_TYPE: str = "chroma"  # 默认向量存储类型
+    RAG_BATCH_SIZE: int = 100  # 批处理大小
+    RAG_RERANK_MODEL: str = "bge-reranker-base"  # 重排序模型
+    RAG_DEFAULT_RETRIEVAL_METHOD: str = "hybrid_search"  # 默认检索方法
+    RAG_USE_RERANK: bool = True  # 是否默认使用重排序
 
     @property
     def DEFAULT_LLM_CONFIG(self) -> LLMConfig:
@@ -58,8 +67,63 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
 
+def validate_rag_config(settings: Settings) -> Dict[str, Any]:
+    """验证RAG配置
+    
+    Args:
+        settings: 配置对象
+        
+    Returns:
+        Dict[str, Any]: 验证后的RAG配置
+    """
+    # 验证分块大小
+    chunk_size = settings.RAG_CHUNK_SIZE
+    if chunk_size < 100:
+        chunk_size = 100
+    elif chunk_size > 10000:
+        chunk_size = 10000
+        
+    # 验证分块重叠大小
+    chunk_overlap = settings.RAG_CHUNK_OVERLAP
+    if chunk_overlap < 0:
+        chunk_overlap = 0
+    elif chunk_overlap > chunk_size // 2:
+        chunk_overlap = chunk_size // 2
+        
+    # 验证向量存储类型
+    vector_store_type = settings.RAG_VECTOR_STORE_TYPE
+    supported_vector_stores = ["chroma", "qdrant"]
+    if vector_store_type not in supported_vector_stores:
+        vector_store_type = "chroma"
+        
+    # 验证批处理大小
+    batch_size = settings.RAG_BATCH_SIZE
+    if batch_size < 1:
+        batch_size = 1
+    elif batch_size > 1000:
+        batch_size = 1000
+        
+    # 验证检索方法
+    retrieval_method = settings.RAG_DEFAULT_RETRIEVAL_METHOD
+    supported_methods = ["semantic_search", "keyword_search", "hybrid_search"]
+    if retrieval_method not in supported_methods:
+        retrieval_method = "hybrid_search"
+        
+    return {
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "vector_store_type": vector_store_type,
+        "batch_size": batch_size,
+        "rerank_model": settings.RAG_RERANK_MODEL,
+        "retrieval_method": retrieval_method,
+        "use_rerank": settings.RAG_USE_RERANK
+    }
+
 @lru_cache()
 def get_settings():
-    return Settings()
+    settings = Settings()
+    # 验证RAG配置
+    settings.rag_config = validate_rag_config(settings)
+    return settings
 
 settings = get_settings()

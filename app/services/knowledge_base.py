@@ -25,12 +25,16 @@ from app.core.logger import Logger
 from app.schemas.identity import UserContext, UserType
 from app.models.identity import UserIdentity
 from app.rag.training.training_manager import RAGTrainingManager
+from app.rag.retrieval.retrieval_service import RetrievalService
+from app.rag.retrieval.retrieval_methods import RetrievalMethod
+from app.rag.rerank.rerank_type import RerankMode
 from app.utils.tasks import train_knowledge_base
 
 class KnowledgeBaseService:
     def __init__(self, db: Session):
         self.db = db
         self.session_manager = SessionManager(db)
+        self.retrieval_service = RetrievalService(db)
 
     async def check_permission(
         self,
@@ -178,7 +182,7 @@ class KnowledgeBaseService:
         training_manager = RAGTrainingManager(self.db)
 
         # 检查是否启用训练队列
-        if settings.ENABLE_TRAINING_QUEUE:
+        if getattr(settings, 'ENABLE_TRAINING_QUEUE', False):
             # 检查是否有其他知识库正在训练
             training_kb = (await self.db.execute(
                 select(KnowledgeBase).filter(
@@ -189,7 +193,7 @@ class KnowledgeBaseService:
             if training_kb:
                 # 如果有其他知识库在训练，将当前知识库添加到队列
                 Logger.info(f"另一个知识库正在训练，将知识库 {kb_id} 加入队列")
-                await training_manager.add_to_queue(kb_id)
+                await training_manager.update_training_status(kb_id, TrainingStatus.QUEUED)
                 await self.db.refresh(kb)
                 return kb
 
@@ -203,6 +207,153 @@ class KnowledgeBaseService:
         await self.db.refresh(kb)
         return kb
 
+    async def query_rag(
+        self,
+        kb_id: int,
+        user_context: UserContext,
+        query: str,
+        method: str = RetrievalMethod.SEMANTIC_SEARCH,
+        top_k: int = 5,
+        use_rerank: bool = False,
+        rerank_mode: str = RerankMode.WEIGHTED_SCORE,
+        skip_permission_check: bool = False
+    ) -> dict:
+        """RAG查询知识库
+        
+        Args:
+            kb_id: 知识库ID
+            user_context: 用户上下文信息
+            query: 查询内容
+            method: 检索方法
+            top_k: 返回结果数量
+            use_rerank: 是否使用重排序
+            rerank_mode: 重排序模式
+            skip_permission_check: 是否跳过权限检查
+            
+        Returns:
+            dict: 查询结果
+            
+        Raises:
+            HTTPException: 当权限不足或知识库不存在时
+        """
+        try:
+            Logger.info(
+                f"处理知识库 {kb_id} 的RAG查询请求，"
+                f"来自 {user_context.user_type} 用户 {user_context.user_id}"
+            )
+
+            # 检查权限（仅当 skip_permission_check 为 False 时）
+            if not skip_permission_check:
+                has_permission = await self.check_kb_permission(
+                    kb_id=kb_id,
+                    identity_id=user_context.identity_id,
+                    required_permission=PermissionType.VIEWER
+                )
+                if not has_permission:
+                    Logger.warning(
+                        f"查询被拒绝: {user_context.user_type} 用户 {user_context.user_id} "
+                        f"没有权限查询知识库 {kb_id}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="没有足够的权限执行此操作"
+                    )
+
+            # 获取知识库
+            kb = (await self.db.execute(
+                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+            )).scalar_one_or_none()
+
+            if not kb:
+                Logger.error(f"查询失败: 知识库 {kb_id} 不存在")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="知识库不存在"
+                )
+
+            if kb.training_status != TrainingStatus.TRAINED:
+                Logger.warning(
+                    f"查询被拒绝: 知识库 {kb_id} 尚未训练完成 "
+                    f"(状态: {kb.training_status})"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="知识库尚未训练完成"
+                )
+
+            # 创建LLM配置
+            llm_config = kb.llm_config
+            if isinstance(llm_config, dict):
+                from app.schemas.llm import LLMConfig
+                llm_config = LLMConfig.model_validate(llm_config)
+
+            # 执行RAG查询
+            results = await self.retrieval_service.query(
+                knowledge_base=kb,
+                query=query,
+                llm_config=llm_config,
+                method=method,
+                top_k=top_k,
+                use_rerank=use_rerank,
+                rerank_mode=rerank_mode,
+                user_id=str(user_context.user_id)
+            )
+            
+            Logger.info(f"知识库 {kb_id} 查询成功: '{query[:100]}...' (如果更长)")
+
+            # 构建元数据
+            doc_metadata = {
+                "kb_id": kb_id, 
+                "top_k": top_k, 
+                "method": method,
+                "use_rerank": use_rerank,
+                "rerank_mode": rerank_mode if use_rerank else None,
+                "user_type": user_context.user_type, 
+                "user_id": user_context.user_id
+            }
+
+            # 记录审计日志
+            if hasattr(self, 'audit_manager'):
+                await self.audit_manager.log_query(
+                    user_context=user_context,
+                    kb_id=kb_id,
+                    query=query,
+                    status="success"
+                )
+
+            return {
+                "query": query,
+                "results": results,
+                "doc_metadata": doc_metadata
+            }
+
+        except HTTPException:
+            # 直接抛出 HTTP 异常，因为这些是预期的错误
+            raise
+        except Exception as e:
+            import traceback
+            error_info = traceback.format_exc()
+            Logger.error(
+                f"知识库 {kb_id} 查询失败\n"
+                f"错误: {str(e)}\n"
+                f"堆栈跟踪:\n{error_info}"
+            )
+            
+            # 记录错误审计
+            if hasattr(self, 'audit_manager'):
+                await self.audit_manager.log_query(
+                    user_context=user_context,
+                    kb_id=kb_id,
+                    query=query,
+                    status="error",
+                    error=f"{str(e)}\n{error_info}"
+                )
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"查询执行失败: {str(e)}"
+            )
+            
     async def query(
         self,
         kb_id: int,
@@ -226,99 +377,16 @@ class KnowledgeBaseService:
         Raises:
             HTTPException: 当权限不足或知识库不存在时
         """
-        try:
-            Logger.info(
-                f"Processing query request for knowledge base {kb_id} "
-                f"from {user_context.user_type} user {user_context.user_id}"
-            )
-
-            # 检查权限（仅当 skip_permission_check 为 False 时）
-            if not skip_permission_check:
-                has_permission = await self.check_kb_permission(
-                    kb_id=kb_id,
-                    identity_id=user_context.identity_id,
-                    required_permission=PermissionType.VIEWER
-                )
-                if not has_permission:
-                    Logger.warning(
-                        f"Query rejected: {user_context.user_type} user {user_context.user_id} "
-                        f"has no permission to query knowledge base {kb_id}"
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="没有足够的权限执行此操作"
-                    )
-
-            # 获取知识库
-            kb = (await self.db.execute(
-                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
-            )).scalar_one_or_none()
-
-            if not kb:
-                Logger.error(f"Query failed: Knowledge base {kb_id} not found")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="知识库不存在"
-                )
-
-            if kb.training_status != TrainingStatus.TRAINED:
-                Logger.warning(
-                    f"Query rejected: Knowledge base {kb_id} not trained yet "
-                    f"(status: {kb.training_status})"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="知识库尚未训练完成"
-                )
-
-            # 获取会话
-            grag = self.session_manager.get_session(str(kb_id), kb.llm_config)
-            result = await grag.async_query(query, top_k=top_k)
-            
-            Logger.info(f"Query successful for knowledge base {kb_id}: '{query[:100]}...' (if longer)")
-
-            # 构建元数据
-            doc_metadata = {"kb_id": kb_id, "top_k": top_k, "user_type": user_context.user_type, "user_id": user_context.user_id}
-
-            # 记录审计日志
-            await self.audit_manager.log_query(
-                user_context=user_context,
-                kb_id=kb_id,
-                query=query,
-                status="success"
-            )
-
-            return {
-                "query": query,
-                "results": result,
-                "doc_metadata": doc_metadata
-            }
-
-        except HTTPException:
-            # 直接抛出 HTTP 异常，因为这些是预期的错误
-            raise
-        except Exception as e:
-            import traceback
-            error_info = traceback.format_exc()
-            Logger.error(
-                f"Query failed for knowledge base {kb_id}\n"
-                f"Error: {str(e)}\n"
-                f"Traceback:\n{error_info}"
-            )
-            
-            # 记录错误审计
-            await self.audit_manager.log_query(
-                user_context=user_context,
-                kb_id=kb_id,
-                query=query,
-                status="error",
-                error=f"{str(e)}\n{error_info}"
-            )
-            
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"查询执行失败: {str(e)}"
-            )
+        # 使用RAG查询替代原有查询
+        return await self.query_rag(
+            kb_id=kb_id,
+            user_context=user_context,
+            query=query,
+            method=RetrievalMethod.HYBRID_SEARCH,  # 默认使用混合搜索
+            top_k=top_k,
+            use_rerank=True,  # 默认使用重排序
+            skip_permission_check=skip_permission_check
+        )
 
     async def get(self, kb_id: int, user_id: int) -> KnowledgeBase:
         """获取知识库详情"""
@@ -696,6 +764,75 @@ class KnowledgeBaseService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
+            )
+            
+    async def check_training_queue(self) -> Optional[int]:
+        """检查训练队列，获取下一个要训练的知识库ID
+        
+        Returns:
+            Optional[int]: 下一个要训练的知识库ID，如果没有则返回None
+        """
+        try:
+            # 创建训练管理器
+            training_manager = RAGTrainingManager(self.db)
+            
+            # 检查队列
+            next_kb_id = await training_manager.check_queue()
+            
+            if next_kb_id:
+                Logger.info(f"找到下一个要训练的知识库: {next_kb_id}")
+                
+                # 更新状态为训练中
+                await training_manager.update_training_status(
+                    next_kb_id,
+                    TrainingStatus.TRAINING
+                )
+                
+                # 启动训练任务
+                train_knowledge_base(next_kb_id)
+                
+            return next_kb_id
+            
+        except Exception as e:
+            Logger.error(f"检查训练队列失败: {str(e)}")
+            return None
+            
+    async def get_training_queue_status(self, user_id: int) -> Dict[str, Any]:
+        """获取训练队列状态
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            Dict[str, Any]: 队列状态信息
+        """
+        try:
+            # 检查用户是否为管理员
+            user = (await self.db.execute(
+                select(User).filter(User.id == user_id)
+            )).scalar_one_or_none()
+            
+            if not user or not user.is_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="只有管理员可以查看训练队列状态"
+                )
+                
+            # 创建训练管理器
+            training_manager = RAGTrainingManager(self.db)
+            
+            # 获取队列状态
+            queue_status = await training_manager.get_queue_status()
+            
+            return queue_status
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            Logger.error(f"获取训练队列状态失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"获取训练队列状态失败: {str(e)}"
             )
 
     async def check_kb_permission(
