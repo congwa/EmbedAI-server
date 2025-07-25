@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from fastapi import WebSocket, status
 from sqlalchemy.orm import Session
+import time
 
 from app.services.chat import ChatService
 from app.services.chat_ai import ChatAIService
@@ -31,17 +32,50 @@ class ChatWebSocketManager:
         self.chat_ai_service = ChatAIService(db)
         self.session_manager = SessionManager(db)
         
+        # 初始化链路追踪
+        trace_id = websocket.headers.get("X-Trace-ID")
+        self.trace_id = Logger.init_trace(
+            trace_id=trace_id,
+            chat_id=chat_id,
+            client_id=user_context.client_id,
+            user_id=user_context.user_id,
+            user_type=user_context.user_type
+        )
+        
+        Logger.websocket_event(
+            event_type="连接初始化",
+            chat_id=chat_id,
+            client_id=user_context.client_id,
+            user_id=user_context.user_id,
+            user_type=user_context.user_type
+        )
+        
     async def handle_user_message(
         self,
         message_data: Dict[str, Any]
     ) -> None:
         """处理用户消息"""
+        start_time = time.time()
+        
+        Logger.websocket_event(
+            event_type="收到用户消息",
+            chat_id=self.chat_id,
+            client_id=self.user_context.client_id,
+            message_length=len(message_data.get("content", ""))
+        )
+        
         # 验证会话状态
         if not await self.session_manager.validate_session(
             chat_id=self.chat_id,
             client_id=self.user_context.client_id,
             third_party_user_id=self.user_context.user_id
         ):
+            Logger.warning(
+                "会话验证失败，关闭WebSocket连接",
+                chat_id=self.chat_id,
+                client_id=self.user_context.client_id,
+                user_id=self.user_context.user_id
+            )
             await self.websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
             
@@ -53,7 +87,8 @@ class ChatWebSocketManager:
             sender_id=self.user_context.user_id,
             doc_metadata={
                 "client_id": self.user_context.client_id,
-                "identity_id": self.user_context.identity_id
+                "identity_id": self.user_context.identity_id,
+                "trace_id": self.trace_id
             }
         )
         
@@ -67,23 +102,53 @@ class ChatWebSocketManager:
         if chat.chat_mode == ChatMode.AI:
             await self._handle_ai_response(message_data["content"])
             
+        process_time = time.time() - start_time
+        Logger.info(
+            f"用户消息处理完成，耗时: {process_time:.2f}秒",
+            chat_id=self.chat_id,
+            client_id=self.user_context.client_id,
+            process_time=process_time
+        )
+            
     async def handle_admin_message(
         self,
         message_data: Dict[str, Any]
     ) -> None:
         """处理管理员消息"""
+        start_time = time.time()
+        
+        Logger.websocket_event(
+            event_type="收到管理员消息",
+            chat_id=self.chat_id,
+            client_id=self.user_context.client_id,
+            message_length=len(message_data.get("content", ""))
+        )
+        
         # 验证会话状态
         if not await self.session_manager.validate_session(
             chat_id=self.chat_id,
             client_id=self.user_context.client_id,
             official_user_id=self.user_context.user_id
         ):
+            Logger.warning(
+                "管理员会话验证失败，关闭WebSocket连接",
+                chat_id=self.chat_id,
+                client_id=self.user_context.client_id,
+                admin_id=self.user_context.user_id
+            )
             await self.websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
             
         # 获取聊天模式
         chat = await self.chat_service.get_chat(self.chat_id)
         if chat.chat_mode != ChatMode.HUMAN:
+            Logger.warning(
+                "当前不是人工服务模式，拒绝处理管理员消息",
+                chat_id=self.chat_id,
+                client_id=self.user_context.client_id,
+                admin_id=self.user_context.user_id,
+                chat_mode=chat.chat_mode
+            )
             await self.websocket.send_json({
                 "type": "error",
                 "message": "当前不是人工服务模式"
@@ -99,18 +164,36 @@ class ChatWebSocketManager:
             doc_metadata={
                 "client_id": self.user_context.client_id,
                 "identity_id": self.user_context.identity_id,
-                "is_admin": True
+                "is_admin": True,
+                "trace_id": self.trace_id
             }
         )
         
         # 广播消息
         await self._broadcast_message(message)
         
+        process_time = time.time() - start_time
+        Logger.info(
+            f"管理员消息处理完成，耗时: {process_time:.2f}秒",
+            chat_id=self.chat_id,
+            client_id=self.user_context.client_id,
+            admin_id=self.user_context.user_id,
+            process_time=process_time
+        )
+        
     async def _handle_ai_response(
         self,
         user_query: str
     ) -> None:
         """处理AI回复"""
+        start_time = time.time()
+        
+        Logger.info(
+            "开始生成AI回复",
+            chat_id=self.chat_id,
+            query_length=len(user_query)
+        )
+        
         try:
             # 获取知识库ID
             chat = await self.chat_service.get_chat(self.chat_id)
@@ -132,15 +215,30 @@ class ChatWebSocketManager:
                     **ai_response["metadata"],
                     "is_ai": True,
                     "client_id": self.user_context.client_id,
-                    "identity_id": self.user_context.identity_id
+                    "identity_id": self.user_context.identity_id,
+                    "trace_id": self.trace_id
                 }
             )
             
             # 广播AI回复
             await self._broadcast_message(ai_message)
             
+            process_time = time.time() - start_time
+            Logger.info(
+                f"AI回复生成成功，耗时: {process_time:.2f}秒",
+                chat_id=self.chat_id,
+                response_length=len(ai_response["content"]),
+                process_time=process_time
+            )
+            
         except Exception as e:
-            Logger.error(f"AI response generation failed: {str(e)}")
+            process_time = time.time() - start_time
+            Logger.error(
+                f"AI回复生成失败: {str(e)}",
+                chat_id=self.chat_id,
+                error=str(e),
+                process_time=process_time
+            )
             
             # 发送错误消息
             error_message = await self.chat_service.add_message(
@@ -150,7 +248,8 @@ class ChatWebSocketManager:
                 doc_metadata={
                     "error": str(e),
                     "client_id": self.user_context.client_id,
-                    "identity_id": self.user_context.identity_id
+                    "identity_id": self.user_context.identity_id,
+                    "trace_id": self.trace_id
                 }
             )
             
@@ -165,6 +264,14 @@ class ChatWebSocketManager:
         message_type: str = "message"
     ) -> None:
         """广播消息"""
+        Logger.debug(
+            f"广播消息: {message_type}",
+            chat_id=self.chat_id,
+            message_id=message.id,
+            message_type=message.message_type,
+            exclude_client=self.user_context.client_id
+        )
+        
         await connection_manager.broadcast_to_chat(
             chat_id=self.chat_id,
             message={
@@ -175,7 +282,8 @@ class ChatWebSocketManager:
                     "message_type": message.message_type,
                     "created_at": message.created_at,
                     "sender_id": message.sender_id,
-                    "doc_metadata": message.doc_metadata
+                    "doc_metadata": message.doc_metadata,
+                    "trace_id": self.trace_id
                 }
             },
             exclude_client=self.user_context.client_id

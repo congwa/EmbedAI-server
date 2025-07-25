@@ -1,5 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import time
 
 from app.models.database import get_db
 from app.core.ws import connection_manager
@@ -21,6 +22,23 @@ async def client_chat_websocket(
     db: Session = Depends(get_db)
 ):
     """第三方用户WebSocket连接"""
+    # 获取或创建trace_id
+    trace_id = websocket.headers.get("X-Trace-ID")
+    trace_id = Logger.init_trace(
+        trace_id=trace_id,
+        chat_id=chat_id,
+        client_id=client_id,
+        user_type="third_party"
+    )
+    
+    start_time = time.time()
+    Logger.websocket_event(
+        event_type="客户端WebSocket连接请求",
+        chat_id=chat_id,
+        client_id=client_id,
+        user_id=third_party_user_id
+    )
+    
     try:
         # 创建服务实例
         session_manager = SessionManager(db)
@@ -43,6 +61,13 @@ async def client_chat_websocket(
         # 验证并获取聊天会话
         chat = await chat_service.get_chat(chat_id)
         if not chat or chat.third_party_user_id != third_party_user_id:
+            Logger.warning(
+                "用户无权访问该聊天会话，拒绝WebSocket连接",
+                chat_id=chat_id,
+                client_id=client_id,
+                user_id=third_party_user_id,
+                expected_user_id=chat.third_party_user_id if chat else None
+            )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
             
@@ -71,6 +96,15 @@ async def client_chat_websocket(
             db=db
         )
         
+        connection_time = time.time() - start_time
+        Logger.info(
+            f"客户端WebSocket连接成功，耗时: {connection_time:.2f}秒",
+            chat_id=chat_id,
+            client_id=client_id,
+            user_id=third_party_user_id,
+            trace_id=trace_id
+        )
+        
         try:
             while True:
                 # 接收消息
@@ -78,7 +112,12 @@ async def client_chat_websocket(
                 
                 # 处理心跳
                 if message_data.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
+                    await websocket.send_json({"type": "pong", "trace_id": trace_id})
+                    Logger.debug(
+                        "客户端心跳",
+                        chat_id=chat_id,
+                        client_id=client_id
+                    )
                     continue
                     
                 # 处理用户消息
@@ -88,7 +127,20 @@ async def client_chat_websocket(
             # 清理连接
             connection_manager.disconnect(chat_id, client_id)
             await session_manager.close_session(chat_id, client_id)
+            Logger.websocket_event(
+                event_type="客户端WebSocket断开连接",
+                chat_id=chat_id,
+                client_id=client_id,
+                user_id=third_party_user_id
+            )
             
     except Exception as e:
-        Logger.error(f"WebSocket error: {str(e)}")
+        Logger.error(
+            f"客户端WebSocket错误: {str(e)}",
+            chat_id=chat_id,
+            client_id=client_id,
+            user_id=third_party_user_id,
+            error=str(e),
+            trace_id=trace_id
+        )
         await websocket.close(code=status.WS_1011_INTERNAL_ERROR) 

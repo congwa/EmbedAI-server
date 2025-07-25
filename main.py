@@ -11,7 +11,7 @@ from app.core.exceptions import (
     validation_exception_handler,
     generic_exception_handler
 )
-from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware
+from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware, TraceMiddleware
 from app.core.logger import Logger
 from contextlib import asynccontextmanager
 import uvicorn
@@ -24,12 +24,12 @@ import logging
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时执行
-    Logger.info("Application starting up...")
+    Logger.info("应用程序启动中...")
     await create_tables()
     await start_monitoring_connections()
     yield
     # 关闭时执行
-    Logger.info("Application shutting down...")
+    Logger.info("应用程序关闭中...")
 
 # 2. 在创建 FastAPI 实例时指定 lifespan
 app = FastAPI(
@@ -53,11 +53,24 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error occurred: {exc}")
-    logger.error(f"Request path: {request.url.path}, method: {request.method}")
+    # 获取当前请求的trace_id
+    trace_id = request.headers.get("X-Trace-ID", "无追踪ID")
+    
+    Logger.error(
+        f"发生未处理的错误: {exc}",
+        request_path=request.url.path,
+        request_method=request.method,
+        trace_id=trace_id,
+        error=str(exc)
+    )
+    
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error", "message": str(exc)},
+        content={
+            "detail": "服务器内部错误",
+            "message": str(exc),
+            "trace_id": trace_id
+        },
     )
 
 # 添加中间件
@@ -68,7 +81,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加链路追踪中间件 - 必须在最外层，最先执行
+app.add_middleware(TraceMiddleware)
+
+# 添加日志中间件
 app.add_middleware(LoggingMiddleware)
+
+# 添加请求验证中间件
 app.add_middleware(RequestValidationMiddleware)
 
 # 注册主路由
@@ -76,8 +96,8 @@ from app.api.v1 import api_router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 注册WebSocket路由
-from app.api.v1.ws.chat import router as chat_router
-app.include_router(chat_router, prefix='/ws')
+from app.api.v1.ws import router as ws_router
+app.include_router(ws_router, prefix='/ws')
 
 async def start_monitoring_connections():
     await connection_manager.monitor_connections()
