@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import uuid
 import jieba
 import re
+import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,6 +33,21 @@ class KeywordIndexProcessor(BaseIndexProcessor):
         self.splitter = FixedTextSplitter(
             chunk_size=settings.RAG_CHUNK_SIZE,
             chunk_overlap=settings.RAG_CHUNK_OVERLAP
+        )
+        
+        # 记录关键词索引处理器初始化
+        Logger.debug(f"初始化关键词索引处理器:")
+        Logger.debug(f"  - 分块大小: {settings.RAG_CHUNK_SIZE}")
+        Logger.debug(f"  - 分块重叠: {settings.RAG_CHUNK_OVERLAP}")
+        Logger.debug(f"  - 索引类型: 关键词索引（经济型）")
+        
+        # 记录初始化性能指标
+        Logger.rag_performance_metrics(
+            operation="keyword_index_processor_init",
+            duration=0.0,
+            chunk_size=settings.RAG_CHUNK_SIZE,
+            chunk_overlap=settings.RAG_CHUNK_OVERLAP,
+            index_type="keyword"
         )
         
     async def extract(self, document: DBDocument) -> List[Document]:
@@ -118,21 +134,75 @@ class KeywordIndexProcessor(BaseIndexProcessor):
         Returns:
             List[str]: 关键词列表
         """
+        start_time = time.time()
+        
         try:
             # 使用jieba分词
-            words = jieba.cut_for_search(text)
+            segmentation_start = time.time()
+            words = list(jieba.cut_for_search(text))
+            segmentation_time = time.time() - segmentation_start
             
             # 过滤停用词和标点符号
+            filter_start = time.time()
             filtered_words = []
             for word in words:
                 # 过滤单个字符和标点符号
                 if len(word) > 1 and not re.match(r'[^\w\s]', word):
                     filtered_words.append(word)
+            filter_time = time.time() - filter_start
+            
+            # 去重
+            unique_keywords = list(set(filtered_words))
+            
+            # 计算处理时间
+            total_time = time.time() - start_time
+            
+            # 记录关键词提取统计
+            Logger.debug(f"关键词提取完成:")
+            Logger.debug(f"  - 文本长度: {len(text)}")
+            Logger.debug(f"  - 原始词数: {len(words)}")
+            Logger.debug(f"  - 过滤后词数: {len(filtered_words)}")
+            Logger.debug(f"  - 唯一关键词数: {len(unique_keywords)}")
+            Logger.debug(f"  - 分词耗时: {segmentation_time:.3f}秒")
+            Logger.debug(f"  - 过滤耗时: {filter_time:.3f}秒")
+            Logger.debug(f"  - 总耗时: {total_time:.3f}秒")
+            
+            # 记录性能指标
+            Logger.rag_performance_metrics(
+                operation="keyword_extraction",
+                duration=total_time,
+                text_length=len(text),
+                original_word_count=len(words),
+                filtered_word_count=len(filtered_words),
+                unique_keyword_count=len(unique_keywords),
+                segmentation_time=segmentation_time,
+                filter_time=filter_time,
+                processing_speed=len(text) / total_time if total_time > 0 else 0
+            )
                     
-            return filtered_words
+            return unique_keywords
             
         except Exception as e:
-            Logger.error(f"提取关键词失败: {str(e)}")
+            # 计算处理时间
+            total_time = time.time() - start_time
+            
+            import traceback
+            error_info = traceback.format_exc()
+            
+            Logger.error(f"提取关键词失败:")
+            Logger.error(f"  - 文本长度: {len(text)}")
+            Logger.error(f"  - 错误信息: {str(e)}")
+            Logger.debug(f"堆栈跟踪:\n{error_info}")
+            
+            # 记录失败的性能指标
+            Logger.rag_performance_metrics(
+                operation="keyword_extraction_failed",
+                duration=total_time,
+                text_length=len(text),
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            
             return []
             
     async def load(self, knowledge_base: KnowledgeBase, documents: List[Document], **kwargs) -> None:
