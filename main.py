@@ -12,6 +12,7 @@ from app.core.exceptions import (
     generic_exception_handler
 )
 from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware, TraceMiddleware
+from app.middleware import RAGLoggingMiddleware
 from app.core.logger import Logger
 from contextlib import asynccontextmanager
 import uvicorn
@@ -84,6 +85,9 @@ app.add_middleware(
 
 # 添加链路追踪中间件 - 必须在最外层，最先执行
 app.add_middleware(TraceMiddleware)
+
+# 添加RAG日志中间件 - 在链路追踪之后，其他中间件之前
+app.add_middleware(RAGLoggingMiddleware)
 
 # 添加日志中间件
 app.add_middleware(LoggingMiddleware)

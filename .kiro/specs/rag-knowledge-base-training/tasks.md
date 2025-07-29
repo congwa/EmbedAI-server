@@ -23,7 +23,7 @@
   - 实现文本清理器TextCleaner
   - _需求: 1.1, 1.2_
 
-- [x] 4. 实现文本分块模块
+- [ ] 4. 实现文本分块模块
   - 实现TextSplitter类，支持多种分块策略
   - 实现RecursiveCharacterTextSplitter算法
   - 实现FixedTextSplitter算法

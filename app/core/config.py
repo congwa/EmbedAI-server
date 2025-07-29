@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
+    # Debug configuration
+    DEBUG: bool = True  # 调试模式
+    
     # Admin configuration
     ADMIN_REGISTER_CODE: str = "123456"  # Add this line - you should change this in production
     
@@ -123,7 +126,7 @@ def validate_rag_config(settings: Settings) -> Dict[str, Any]:
 def get_settings():
     settings = Settings()
     # 验证RAG配置
-    settings.rag_config = validate_rag_config(settings)
+    # settings.rag_config = validate_rag_config(settings)
     return settings
 
 settings = get_settings()
