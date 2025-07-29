@@ -5,7 +5,7 @@ RAG日志中间件
 """
 import time
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware

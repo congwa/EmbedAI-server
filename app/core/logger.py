@@ -11,15 +11,15 @@ from contextvars import ContextVar
 from app.core.config import settings
 
 # 创建上下文变量，用于存储请求跟踪信息
-trace_context: ContextVar[Dict[str, Any]] = ContextVar('trace_context', default={})
+trace_context: ContextVar[Dict[str, Any]] = ContextVar("trace_context", default={})
 
 
 class RAGTraceContext:
     """RAG链路追踪上下文管理器"""
-    
+
     def __init__(self, trace_id: str):
         """初始化RAG追踪上下文
-        
+
         Args:
             trace_id: 追踪ID
         """
@@ -30,10 +30,12 @@ class RAGTraceContext:
         self.start_time: float = time.time()
         self.stages: List[Dict[str, Any]] = []  # 记录各个阶段的信息
         self.performance_metrics: Dict[str, Any] = {}
-        
-    def set_kb_context(self, kb_id: int, user_id: int = None, operation_type: str = None):
+
+    def set_kb_context(
+        self, kb_id: int, user_id: int = None, operation_type: str = None
+    ):
         """设置知识库上下文
-        
+
         Args:
             kb_id: 知识库ID
             user_id: 用户ID
@@ -42,10 +44,10 @@ class RAGTraceContext:
         self.kb_id = kb_id
         self.user_id = user_id
         self.operation_type = operation_type
-        
+
     def add_stage(self, stage_name: str, **kwargs):
         """添加处理阶段
-        
+
         Args:
             stage_name: 阶段名称
             **kwargs: 阶段相关的额外信息
@@ -55,29 +57,29 @@ class RAGTraceContext:
             "stage": stage_name,
             "timestamp": current_time,
             "duration_from_start": current_time - self.start_time,
-            **kwargs
+            **kwargs,
         }
         self.stages.append(stage_info)
-        
+
     def update_performance_metrics(self, **metrics):
         """更新性能指标
-        
+
         Args:
             **metrics: 性能指标键值对
         """
         self.performance_metrics.update(metrics)
-        
+
     def get_total_duration(self) -> float:
         """获取总耗时
-        
+
         Returns:
             float: 总耗时(秒)
         """
         return time.time() - self.start_time
-        
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式
-        
+
         Returns:
             Dict[str, Any]: 上下文信息字典
         """
@@ -89,12 +91,13 @@ class RAGTraceContext:
             "start_time": self.start_time,
             "total_duration": self.get_total_duration(),
             "stages": self.stages,
-            "performance_metrics": self.performance_metrics
+            "performance_metrics": self.performance_metrics,
         }
+
 
 class Logger:
     """增强的日志记录器
-    
+
     特性:
     1. 链路追踪 - 通过trace_id关联同一请求的所有日志
     2. 详细中文日志 - 提供丰富的上下文信息
@@ -102,8 +105,9 @@ class Logger:
     4. 多级日志 - 支持不同级别的日志记录
     5. 性能记录 - 支持记录操作耗时
     """
+
     _instance: Optional[logging.Logger] = None
-    
+
     @classmethod
     def get_logger(cls) -> logging.Logger:
         """获取日志记录器实例"""
@@ -118,16 +122,16 @@ class Logger:
         logger = logging.getLogger("EmbedAi-Server")
         logger.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
         logger.propagate = False
-        
+
         # 如果已经有处理器，则不重复添加
         if logger.handlers:
             return logger
-            
+
         # 创建格式化器 - 普通文本格式
         text_formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] [%(trace_id)s] [%(module)s:%(lineno)d] - %(message)s'
+            "%(asctime)s [%(levelname)s] [%(trace_id)s] [%(module)s:%(lineno)d] - %(message)s"
         )
-        
+
         # 创建格式化器 - JSON格式
         class JsonFormatter(logging.Formatter):
             def format(self, record):
@@ -137,16 +141,16 @@ class Logger:
                     "trace_id": getattr(record, "trace_id", "无"),
                     "module": record.module,
                     "line": record.lineno,
-                    "message": record.getMessage()
+                    "message": record.getMessage(),
                 }
-                
+
                 # 添加额外字段
                 for key, value in getattr(record, "extra_fields", {}).items():
                     if key not in log_data:
                         log_data[key] = value
-                        
+
                 return json.dumps(log_data, ensure_ascii=False)
-        
+
         json_formatter = JsonFormatter()
 
         # 创建控制台处理器
@@ -161,23 +165,23 @@ class Logger:
             log_dir / "app.log",
             maxBytes=10485760,  # 10MB
             backupCount=5,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         file_handler.setFormatter(text_formatter)
         logger.addHandler(file_handler)
-        
+
         # 创建文件处理器 - JSON格式日志
         json_handler = RotatingFileHandler(
             log_dir / "app.json.log",
             maxBytes=10485760,  # 10MB
             backupCount=5,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         json_handler.setFormatter(json_formatter)
         logger.addHandler(json_handler)
 
         return logger
-        
+
     @staticmethod
     def _get_trace_context() -> Dict[str, Any]:
         """获取当前请求的追踪上下文"""
@@ -187,7 +191,7 @@ class Logger:
                 # 如果上下文为空，创建新的上下文
                 context = {
                     "trace_id": f"trace-{uuid.uuid4().hex[:8]}",
-                    "start_time": time.time()
+                    "start_time": time.time(),
                 }
                 trace_context.set(context)
             return context
@@ -195,89 +199,90 @@ class Logger:
             # 如果获取上下文失败，返回默认值
             return {
                 "trace_id": f"fallback-{uuid.uuid4().hex[:8]}",
-                "start_time": time.time()
+                "start_time": time.time(),
             }
-    
+
     @classmethod
     def init_trace(cls, trace_id: Optional[str] = None, **kwargs) -> str:
         """初始化请求追踪
-        
+
         Args:
             trace_id: 可选的追踪ID，如果不提供则自动生成
             **kwargs: 其他要添加到追踪上下文的键值对
-            
+
         Returns:
             str: 追踪ID
         """
         if not trace_id:
             trace_id = f"trace-{uuid.uuid4().hex[:8]}"
-            
-        context = {
-            "trace_id": trace_id,
-            "start_time": time.time(),
-            **kwargs
-        }
-        
+
+        context = {"trace_id": trace_id, "start_time": time.time(), **kwargs}
+
         # 如果是RAG相关操作，创建RAG追踪上下文
-        if any(key in kwargs for key in ['kb_id', 'operation_type', 'rag_context']):
+        if any(key in kwargs for key in ["kb_id", "operation_type", "rag_context"]):
             rag_context = RAGTraceContext(trace_id)
-            if 'kb_id' in kwargs:
+            if "kb_id" in kwargs:
                 rag_context.set_kb_context(
-                    kb_id=kwargs.get('kb_id'),
-                    user_id=kwargs.get('user_id'),
-                    operation_type=kwargs.get('operation_type')
+                    kb_id=kwargs.get("kb_id"),
+                    user_id=kwargs.get("user_id"),
+                    operation_type=kwargs.get("operation_type"),
                 )
-            context['rag_context'] = rag_context
-            
+            context["rag_context"] = rag_context
+
         trace_context.set(context)
         return trace_id
-        
+
     @classmethod
-    def init_rag_trace(cls, kb_id: int, user_id: int = None, operation_type: str = None,
-                       trace_id: Optional[str] = None) -> str:
+    def init_rag_trace(
+        cls,
+        kb_id: int,
+        user_id: int = None,
+        operation_type: str = None,
+        trace_id: Optional[str] = None,
+    ) -> str:
         """初始化RAG特定的请求追踪
-        
+
         Args:
             kb_id: 知识库ID
             user_id: 用户ID
             operation_type: 操作类型 ('training', 'query', 'management')
             trace_id: 可选的追踪ID，如果不提供则自动生成
-            
+
         Returns:
             str: 追踪ID
         """
         if not trace_id:
             trace_id = f"rag-{uuid.uuid4().hex[:8]}"
-            
+
         rag_context = RAGTraceContext(trace_id)
         rag_context.set_kb_context(kb_id, user_id, operation_type)
-        
+
         context = {
             "trace_id": trace_id,
             "start_time": time.time(),
             "kb_id": kb_id,
             "user_id": user_id,
             "operation_type": operation_type,
-            "rag_context": rag_context
+            "rag_context": rag_context,
         }
-        
+
         trace_context.set(context)
         return trace_id
-        
+
     @classmethod
     def get_rag_context(cls) -> Optional[RAGTraceContext]:
         """获取当前的RAG追踪上下文
-        
+
         Returns:
             Optional[RAGTraceContext]: RAG追踪上下文，如果不存在则返回None
         """
         context = cls._get_trace_context()
-        return context.get('rag_context')
-        
+        return context.get("rag_context")
+
     @classmethod
     def add_rag_stage(cls, stage_name: str, **kwargs):
         """添加RAG处理阶段
-        
+
         Args:
             stage_name: 阶段名称
             **kwargs: 阶段相关的额外信息
@@ -285,27 +290,87 @@ class Logger:
         rag_context = cls.get_rag_context()
         if rag_context:
             rag_context.add_stage(stage_name, **kwargs)
-            
+
     @classmethod
     def update_rag_metrics(cls, **metrics):
         """更新RAG性能指标
-        
+
         Args:
             **metrics: 性能指标键值对
         """
         rag_context = cls.get_rag_context()
         if rag_context:
             rag_context.update_performance_metrics(**metrics)
-    
+
+    @classmethod
+    def get_rag_trace_summary(cls) -> Dict[str, Any]:
+        """获取RAG追踪摘要信息
+
+        Returns:
+            Dict[str, Any]: 追踪摘要信息
+        """
+        rag_context = cls.get_rag_context()
+        if rag_context:
+            return rag_context.to_dict()
+        return {}
+
+    @classmethod
+    def finalize_rag_trace(cls) -> Dict[str, Any]:
+        """完成RAG追踪并返回摘要
+
+        Returns:
+            Dict[str, Any]: 完整的追踪信息
+        """
+        rag_context = cls.get_rag_context()
+        if rag_context:
+            # 添加最终阶段
+            rag_context.add_stage(
+                "trace_finalized", final_duration=rag_context.get_total_duration()
+            )
+
+            # 记录追踪完成日志
+            cls.info(
+                "RAG链路追踪完成",
+                extra={
+                    "trace_id": rag_context.trace_id,
+                    "kb_id": rag_context.kb_id,
+                    "operation_type": rag_context.operation_type,
+                    "total_duration": rag_context.get_total_duration(),
+                    "stages_count": len(rag_context.stages),
+                    "performance_metrics": rag_context.performance_metrics,
+                },
+            )
+
+            return rag_context.to_dict()
+        return {}
+
+    @classmethod
+    def set_rag_operation_context(cls, operation_type: str, **context_data):
+        """设置RAG操作上下文信息
+
+        Args:
+            operation_type: 操作类型
+            **context_data: 上下文数据
+        """
+        rag_context = cls.get_rag_context()
+        if rag_context:
+            rag_context.operation_type = operation_type
+            rag_context.update_performance_metrics(**context_data)
+
+            cls.debug(
+                f"设置RAG操作上下文: {operation_type}",
+                extra={"operation_type": operation_type, "context_data": context_data},
+            )
+
     @classmethod
     def get_trace_id(cls) -> str:
         """获取当前请求的追踪ID"""
         return cls._get_trace_context().get("trace_id", "无追踪ID")
-        
+
     @classmethod
     def _log(cls, level: int, message: str, extra: Dict[str, Any] = None):
         """记录日志的内部方法
-        
+
         Args:
             level: 日志级别
             message: 日志消息
@@ -313,28 +378,28 @@ class Logger:
         """
         context = cls._get_trace_context()
         trace_id = context.get("trace_id", "无追踪ID")
-        
+
         # 准备额外字段
         extra_fields = {
             "trace_id": trace_id,
             "thread_id": threading.get_ident(),
-            "extra_fields": extra or {}
+            "extra_fields": extra or {},
         }
-        
+
         # 添加RAG上下文信息
-        rag_context = context.get('rag_context')
+        rag_context = context.get("rag_context")
         if rag_context:
             extra_fields["rag_context"] = {
                 "kb_id": rag_context.kb_id,
                 "user_id": rag_context.user_id,
                 "operation_type": rag_context.operation_type,
                 "total_duration": rag_context.get_total_duration(),
-                "stage_count": len(rag_context.stages)
+                "stage_count": len(rag_context.stages),
             }
-            
+
         if extra:
             extra_fields["extra_fields"].update(extra)
-            
+
         # 获取调用者信息
         logger = cls.get_logger()
         logger.log(level, message, extra=extra_fields)
@@ -342,7 +407,7 @@ class Logger:
     @classmethod
     def info(cls, message: str, **kwargs):
         """记录信息级别日志
-        
+
         Args:
             message: 日志消息
             **kwargs: 额外的日志字段
@@ -352,7 +417,7 @@ class Logger:
     @classmethod
     def error(cls, message: str, **kwargs):
         """记录错误级别日志
-        
+
         Args:
             message: 日志消息
             **kwargs: 额外的日志字段
@@ -362,7 +427,7 @@ class Logger:
     @classmethod
     def warning(cls, message: str, **kwargs):
         """记录警告级别日志
-        
+
         Args:
             message: 日志消息
             **kwargs: 额外的日志字段
@@ -372,17 +437,17 @@ class Logger:
     @classmethod
     def debug(cls, message: str, **kwargs):
         """记录调试级别日志
-        
+
         Args:
             message: 日志消息
             **kwargs: 额外的日志字段
         """
         cls._log(logging.DEBUG, message, kwargs)
-        
+
     @classmethod
     def api_request(cls, method: str, path: str, params: Dict = None, **kwargs):
         """记录API请求日志
-        
+
         Args:
             method: HTTP方法
             path: 请求路径
@@ -394,14 +459,15 @@ class Logger:
             api_method=method,
             api_path=path,
             api_params=params or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def api_response(cls, method: str, path: str, status_code: int, 
-                     process_time: float, **kwargs):
+    def api_response(
+        cls, method: str, path: str, status_code: int, process_time: float, **kwargs
+    ):
         """记录API响应日志
-        
+
         Args:
             method: HTTP方法
             path: 请求路径
@@ -415,30 +481,28 @@ class Logger:
             api_path=path,
             status_code=status_code,
             process_time=process_time,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def service_call(cls, service: str, method: str, **kwargs):
         """记录服务调用日志
-        
+
         Args:
             service: 服务名称
             method: 方法名称
             **kwargs: 额外的日志字段
         """
         cls.debug(
-            f"调用服务: {service}.{method}",
-            service=service,
-            method=method,
-            **kwargs
+            f"调用服务: {service}.{method}", service=service, method=method, **kwargs
         )
-        
+
     @classmethod
-    def service_result(cls, service: str, method: str, 
-                       success: bool, process_time: float, **kwargs):
+    def service_result(
+        cls, service: str, method: str, success: bool, process_time: float, **kwargs
+    ):
         """记录服务调用结果日志
-        
+
         Args:
             service: 服务名称
             method: 方法名称
@@ -453,30 +517,31 @@ class Logger:
             method=method,
             success=success,
             process_time=process_time,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def database_query(cls, query: str, params: Any = None, **kwargs):
         """记录数据库查询日志
-        
+
         Args:
             query: SQL查询
             params: 查询参数
             **kwargs: 额外的日志字段
         """
-        cls.debug(
-            f"数据库查询: {query}",
-            query=query,
-            params=params,
-            **kwargs
-        )
-        
+        cls.debug(f"数据库查询: {query}", query=query, params=params, **kwargs)
+
     @classmethod
-    def database_result(cls, query: str, success: bool, 
-                        process_time: float, row_count: int = None, **kwargs):
+    def database_result(
+        cls,
+        query: str,
+        success: bool,
+        process_time: float,
+        row_count: int = None,
+        **kwargs,
+    ):
         """记录数据库查询结果日志
-        
+
         Args:
             query: SQL查询
             success: 是否成功
@@ -491,13 +556,13 @@ class Logger:
             success=success,
             process_time=process_time,
             row_count=row_count,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def rag_operation(cls, operation: str, kb_id: int = None, **kwargs):
         """记录RAG操作日志
-        
+
         Args:
             operation: 操作类型
             kb_id: 知识库ID
@@ -505,17 +570,15 @@ class Logger:
         """
         kb_info = f" - 知识库ID: {kb_id}" if kb_id is not None else ""
         cls.info(
-            f"RAG操作: {operation}{kb_info}",
-            operation=operation,
-            kb_id=kb_id,
-            **kwargs
+            f"RAG操作: {operation}{kb_info}", operation=operation, kb_id=kb_id, **kwargs
         )
-        
+
     @classmethod
-    def websocket_event(cls, event_type: str, chat_id: int = None, 
-                        client_id: str = None, **kwargs):
+    def websocket_event(
+        cls, event_type: str, chat_id: int = None, client_id: str = None, **kwargs
+    ):
         """记录WebSocket事件日志
-        
+
         Args:
             event_type: 事件类型
             chat_id: 聊天ID
@@ -529,16 +592,23 @@ class Logger:
             event_type=event_type,
             chat_id=chat_id,
             client_id=client_id,
-            **kwargs
+            **kwargs,
         )
 
     # ==================== RAG特定日志方法 ====================
-    
+
     @classmethod
-    def rag_api_request(cls, endpoint: str, method: str = "POST", kb_id: int = None, 
-                        user_id: int = None, params: Dict = None, **kwargs):
+    def rag_api_request(
+        cls,
+        endpoint: str,
+        method: str = "POST",
+        kb_id: int = None,
+        user_id: int = None,
+        params: Dict = None,
+        **kwargs,
+    ):
         """记录RAG API请求日志
-        
+
         Args:
             endpoint: API端点
             method: HTTP方法
@@ -557,15 +627,22 @@ class Logger:
             kb_id=kb_id,
             user_id=user_id,
             api_params=params or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_api_response(cls, endpoint: str, method: str = "POST", status_code: int = 200,
-                         process_time: float = 0.0, kb_id: int = None, 
-                         result_summary: Dict = None, **kwargs):
+    def rag_api_response(
+        cls,
+        endpoint: str,
+        method: str = "POST",
+        status_code: int = 200,
+        process_time: float = 0.0,
+        kb_id: int = None,
+        result_summary: Dict = None,
+        **kwargs,
+    ):
         """记录RAG API响应日志
-        
+
         Args:
             endpoint: API端点
             method: HTTP方法
@@ -585,14 +662,21 @@ class Logger:
             process_time=process_time,
             kb_id=kb_id,
             result_summary=result_summary or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_api_error(cls, endpoint: str, method: str = "POST", error: str = "",
-                      kb_id: int = None, user_id: int = None, **kwargs):
+    def rag_api_error(
+        cls,
+        endpoint: str,
+        method: str = "POST",
+        error: str = "",
+        kb_id: int = None,
+        user_id: int = None,
+        **kwargs,
+    ):
         """记录RAG API错误日志
-        
+
         Args:
             endpoint: API端点
             method: HTTP方法
@@ -611,13 +695,15 @@ class Logger:
             error_message=error,
             kb_id=kb_id,
             user_id=user_id,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_training_start(cls, kb_id: int, document_count: int, config: Dict = None, **kwargs):
+    def rag_training_start(
+        cls, kb_id: int, document_count: int, config: Dict = None, **kwargs
+    ):
         """记录RAG训练开始日志
-        
+
         Args:
             kb_id: 知识库ID
             document_count: 文档数量
@@ -630,14 +716,20 @@ class Logger:
             kb_id=kb_id,
             document_count=document_count,
             training_config=config or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_training_complete(cls, kb_id: int, success: bool, duration: float,
-                              result_summary: Dict = None, **kwargs):
+    def rag_training_complete(
+        cls,
+        kb_id: int,
+        success: bool,
+        duration: float,
+        result_summary: Dict = None,
+        **kwargs,
+    ):
         """记录RAG训练完成日志
-        
+
         Args:
             kb_id: 知识库ID
             success: 是否成功
@@ -654,13 +746,15 @@ class Logger:
             training_success=success,
             training_duration=duration,
             result_summary=result_summary or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_document_processing_start(cls, kb_id: int, document_count: int, config: Dict = None, **kwargs):
+    def rag_document_processing_start(
+        cls, kb_id: int, document_count: int, config: Dict = None, **kwargs
+    ):
         """记录RAG文档处理开始日志
-        
+
         Args:
             kb_id: 知识库ID
             document_count: 文档数量
@@ -673,14 +767,20 @@ class Logger:
             kb_id=kb_id,
             document_count=document_count,
             processing_config=config or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_document_start(cls, kb_id: int, document_id: int, document_title: str = "",
-                           progress: Dict = None, **kwargs):
+    def rag_document_start(
+        cls,
+        kb_id: int,
+        document_id: int,
+        document_title: str = "",
+        progress: Dict = None,
+        **kwargs,
+    ):
         """记录RAG单个文档处理开始日志
-        
+
         Args:
             kb_id: 知识库ID
             document_id: 文档ID
@@ -691,7 +791,7 @@ class Logger:
         progress_info = ""
         if progress and "current" in progress and "total" in progress:
             progress_info = f" - 进度: {progress['current']}/{progress['total']}"
-        
+
         cls.info(
             f"RAG文档处理: 知识库ID {kb_id} - 文档ID {document_id} - 标题: {document_title}{progress_info}",
             rag_operation_type="document_start",
@@ -699,14 +799,21 @@ class Logger:
             document_id=document_id,
             document_title=document_title,
             progress=progress or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_document_error(cls, kb_id: int, document_id: int, stage: str, error: str,
-                           progress: Dict = None, **kwargs):
+    def rag_document_error(
+        cls,
+        kb_id: int,
+        document_id: int,
+        stage: str,
+        error: str,
+        progress: Dict = None,
+        **kwargs,
+    ):
         """记录RAG文档处理错误日志
-        
+
         Args:
             kb_id: 知识库ID
             document_id: 文档ID
@@ -718,7 +825,7 @@ class Logger:
         progress_info = ""
         if progress and "current" in progress and "total" in progress:
             progress_info = f" - 进度: {progress['current']}/{progress['total']}"
-            
+
         cls.error(
             f"RAG文档处理错误: 知识库ID {kb_id} - 文档ID {document_id} - 阶段: {stage} - 错误: {error}{progress_info}",
             rag_operation_type="document_error",
@@ -727,13 +834,15 @@ class Logger:
             processing_stage=stage,
             error_message=error,
             progress=progress or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_extraction_start(cls, document_id: int, file_path: str, file_type: str = "", **kwargs):
+    def rag_extraction_start(
+        cls, document_id: int, file_path: str, file_type: str = "", **kwargs
+    ):
         """记录RAG文档提取开始日志
-        
+
         Args:
             document_id: 文档ID
             file_path: 文件路径
@@ -746,14 +855,15 @@ class Logger:
             document_id=document_id,
             file_path=file_path,
             file_type=file_type,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_extraction_success(cls, document_id: int, content_length: int, 
-                               extraction_time: float, **kwargs):
+    def rag_extraction_success(
+        cls, document_id: int, content_length: int, extraction_time: float, **kwargs
+    ):
         """记录RAG文档提取成功日志
-        
+
         Args:
             document_id: 文档ID
             content_length: 内容长度
@@ -766,13 +876,15 @@ class Logger:
             document_id=document_id,
             content_length=content_length,
             extraction_time=extraction_time,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_chunking_start(cls, document_id: int, content_length: int, chunk_size: int, **kwargs):
+    def rag_chunking_start(
+        cls, document_id: int, content_length: int, chunk_size: int, **kwargs
+    ):
         """记录RAG文本分块开始日志
-        
+
         Args:
             document_id: 文档ID
             content_length: 内容长度
@@ -785,14 +897,15 @@ class Logger:
             document_id=document_id,
             content_length=content_length,
             chunk_size=chunk_size,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_chunking_success(cls, document_id: int, chunk_count: int, 
-                             chunking_time: float, **kwargs):
+    def rag_chunking_success(
+        cls, document_id: int, chunk_count: int, chunking_time: float, **kwargs
+    ):
         """记录RAG文本分块成功日志
-        
+
         Args:
             document_id: 文档ID
             chunk_count: 分块数量
@@ -805,14 +918,20 @@ class Logger:
             document_id=document_id,
             chunk_count=chunk_count,
             chunking_time=chunking_time,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_embedding_start(cls, document_id: int = None, chunk_count: int = 0, 
-                            model: str = "", batch_size: int = 0, **kwargs):
+    def rag_embedding_start(
+        cls,
+        document_id: int = None,
+        chunk_count: int = 0,
+        model: str = "",
+        batch_size: int = 0,
+        **kwargs,
+    ):
         """记录RAG向量化开始日志
-        
+
         Args:
             document_id: 文档ID
             chunk_count: 分块数量
@@ -828,14 +947,21 @@ class Logger:
             chunk_count=chunk_count,
             embedding_model=model,
             batch_size=batch_size,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_embedding_batch(cls, batch_num: int, total_batches: int, batch_size: int,
-                            model: str = "", progress: Dict = None, **kwargs):
+    def rag_embedding_batch(
+        cls,
+        batch_num: int,
+        total_batches: int,
+        batch_size: int,
+        model: str = "",
+        progress: Dict = None,
+        **kwargs,
+    ):
         """记录RAG向量化批处理日志
-        
+
         Args:
             batch_num: 当前批次号
             total_batches: 总批次数
@@ -852,14 +978,20 @@ class Logger:
             batch_size=batch_size,
             embedding_model=model,
             progress=progress or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_embedding_success(cls, document_id: int = None, embedding_count: int = 0,
-                              embedding_time: float = 0.0, model: str = "", **kwargs):
+    def rag_embedding_success(
+        cls,
+        document_id: int = None,
+        embedding_count: int = 0,
+        embedding_time: float = 0.0,
+        model: str = "",
+        **kwargs,
+    ):
         """记录RAG向量化成功日志
-        
+
         Args:
             document_id: 文档ID
             embedding_count: 向量数量
@@ -875,14 +1007,21 @@ class Logger:
             embedding_count=embedding_count,
             embedding_time=embedding_time,
             embedding_model=model,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_query_start(cls, kb_id: int, query: str, method: str = "", 
-                        params: Dict = None, user_id: int = None, **kwargs):
+    def rag_query_start(
+        cls,
+        kb_id: int,
+        query: str,
+        method: str = "",
+        params: Dict = None,
+        user_id: int = None,
+        **kwargs,
+    ):
         """记录RAG查询开始日志
-        
+
         Args:
             kb_id: 知识库ID
             query: 查询内容
@@ -901,14 +1040,21 @@ class Logger:
             query_method=method,
             query_params=params or {},
             user_id=user_id,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_query_complete(cls, kb_id: int, query: str, success: bool, duration: float,
-                           result_count: int = 0, **kwargs):
+    def rag_query_complete(
+        cls,
+        kb_id: int,
+        query: str,
+        success: bool,
+        duration: float,
+        result_count: int = 0,
+        **kwargs,
+    ):
         """记录RAG查询完成日志
-        
+
         Args:
             kb_id: 知识库ID
             query: 查询内容
@@ -928,14 +1074,21 @@ class Logger:
             query_success=success,
             query_duration=duration,
             result_count=result_count,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_retrieval_result(cls, kb_id: int, query: str, result_count: int,
-                             scores: List[float] = None, method: str = "", **kwargs):
+    def rag_retrieval_result(
+        cls,
+        kb_id: int,
+        query: str,
+        result_count: int,
+        scores: List[float] = None,
+        method: str = "",
+        **kwargs,
+    ):
         """记录RAG检索结果日志
-        
+
         Args:
             kb_id: 知识库ID
             query: 查询内容
@@ -947,7 +1100,7 @@ class Logger:
         query_preview = query[:50] + "..." if len(query) > 50 else query
         avg_score = sum(scores) / len(scores) if scores else 0.0
         max_score = max(scores) if scores else 0.0
-        
+
         cls.debug(
             f"RAG检索结果: 知识库ID {kb_id} - 查询: '{query_preview}' - 方法: {method} - 结果数: {result_count} - 平均分: {avg_score:.3f} - 最高分: {max_score:.3f}",
             rag_operation_type="retrieval_result",
@@ -958,14 +1111,20 @@ class Logger:
             scores=scores or [],
             avg_score=avg_score,
             max_score=max_score,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_permission_check(cls, kb_id: int, user_id: int, required_permission: str,
-                             granted: bool = True, **kwargs):
+    def rag_permission_check(
+        cls,
+        kb_id: int,
+        user_id: int,
+        required_permission: str,
+        granted: bool = True,
+        **kwargs,
+    ):
         """记录RAG权限检查日志
-        
+
         Args:
             kb_id: 知识库ID
             user_id: 用户ID
@@ -982,14 +1141,15 @@ class Logger:
             user_id=user_id,
             required_permission=required_permission,
             permission_granted=granted,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_service_start(cls, service: str, method: str, kb_id: int = None, 
-                          user_id: int = None, **kwargs):
+    def rag_service_start(
+        cls, service: str, method: str, kb_id: int = None, user_id: int = None, **kwargs
+    ):
         """记录RAG服务调用开始日志
-        
+
         Args:
             service: 服务名称
             method: 方法名称
@@ -1006,14 +1166,20 @@ class Logger:
             method=method,
             kb_id=kb_id,
             user_id=user_id,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_service_success(cls, service: str, method: str, duration: float = 0.0,
-                            result_summary: Dict = None, **kwargs):
+    def rag_service_success(
+        cls,
+        service: str,
+        method: str,
+        duration: float = 0.0,
+        result_summary: Dict = None,
+        **kwargs,
+    ):
         """记录RAG服务调用成功日志
-        
+
         Args:
             service: 服务名称
             method: 方法名称
@@ -1028,14 +1194,15 @@ class Logger:
             method=method,
             service_duration=duration,
             result_summary=result_summary or {},
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_service_error(cls, service: str, method: str, error: str, 
-                          duration: float = 0.0, **kwargs):
+    def rag_service_error(
+        cls, service: str, method: str, error: str, duration: float = 0.0, **kwargs
+    ):
         """记录RAG服务调用错误日志
-        
+
         Args:
             service: 服务名称
             method: 方法名称
@@ -1050,14 +1217,21 @@ class Logger:
             method=method,
             error_message=error,
             service_duration=duration,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_performance_metrics(cls, operation: str, duration: float, memory_usage: int = 0,
-                                cpu_usage: float = 0.0, kb_id: int = None, **kwargs):
+    def rag_performance_metrics(
+        cls,
+        operation: str,
+        duration: float,
+        memory_usage: int = 0,
+        cpu_usage: float = 0.0,
+        kb_id: int = None,
+        **kwargs,
+    ):
         """记录RAG性能指标日志
-        
+
         Args:
             operation: 操作类型
             duration: 执行耗时(秒)
@@ -1077,13 +1251,15 @@ class Logger:
             memory_mb=memory_mb,
             cpu_usage=cpu_usage,
             kb_id=kb_id,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_retry_attempt(cls, operation: str, attempt: int, max_retries: int, **kwargs):
+    def rag_retry_attempt(
+        cls, operation: str, attempt: int, max_retries: int, **kwargs
+    ):
         """记录RAG重试尝试日志
-        
+
         Args:
             operation: 操作名称
             attempt: 当前尝试次数
@@ -1096,13 +1272,13 @@ class Logger:
             operation=operation,
             attempt_number=attempt,
             max_retries=max_retries,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def rag_retry_success(cls, operation: str, final_attempt: int, **kwargs):
         """记录RAG重试成功日志
-        
+
         Args:
             operation: 操作名称
             final_attempt: 最终成功的尝试次数
@@ -1113,13 +1289,13 @@ class Logger:
             rag_operation_type="retry_success",
             operation=operation,
             final_attempt=final_attempt,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def rag_retry_failed(cls, operation: str, attempt: int, error: str, **kwargs):
         """记录RAG重试失败日志
-        
+
         Args:
             operation: 操作名称
             attempt: 尝试次数
@@ -1132,13 +1308,15 @@ class Logger:
             operation=operation,
             attempt_number=attempt,
             error_message=error,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
-    def rag_retry_exhausted(cls, operation: str, total_attempts: int, final_error: str, **kwargs):
+    def rag_retry_exhausted(
+        cls, operation: str, total_attempts: int, final_error: str, **kwargs
+    ):
         """记录RAG重试耗尽日志
-        
+
         Args:
             operation: 操作名称
             total_attempts: 总尝试次数
@@ -1151,13 +1329,13 @@ class Logger:
             operation=operation,
             total_attempts=total_attempts,
             final_error=final_error,
-            **kwargs
+            **kwargs,
         )
-        
+
     @classmethod
     def rag_performance_metrics(cls, operation: str, duration: float, **metrics):
         """记录RAG性能指标日志
-        
+
         Args:
             operation: 操作名称
             duration: 操作耗时(秒)
@@ -1168,5 +1346,249 @@ class Logger:
             rag_operation_type="performance_metrics",
             operation=operation,
             duration=duration,
-            **metrics
-        ) 
+            **metrics,
+        )
+
+    @classmethod
+    def rag_document_processing_complete(
+        cls,
+        kb_id: int,
+        success: bool,
+        duration: float,
+        processed_count: int = 0,
+        failed_count: int = 0,
+        result_summary: Dict = None,
+        **kwargs,
+    ):
+        """记录RAG文档处理完成日志
+
+        Args:
+            kb_id: 知识库ID
+            success: 是否成功
+            duration: 处理耗时(秒)
+            processed_count: 成功处理的文档数量
+            failed_count: 处理失败的文档数量
+            result_summary: 结果摘要
+            **kwargs: 额外的日志字段
+        """
+        status = "成功" if success else "失败"
+        level = cls.info if success else cls.error
+        level(
+            f"RAG文档处理{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒 - 成功: {processed_count} - 失败: {failed_count}",
+            rag_operation_type="document_processing_complete",
+            kb_id=kb_id,
+            processing_success=success,
+            processing_duration=duration,
+            processed_count=processed_count,
+            failed_count=failed_count,
+            result_summary=result_summary or {},
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_document_complete(
+        cls,
+        kb_id: int,
+        document_id: int,
+        success: bool,
+        duration: float,
+        stages_completed: List[str] = None,
+        error: str = "",
+        **kwargs,
+    ):
+        """记录RAG单个文档处理完成日志
+
+        Args:
+            kb_id: 知识库ID
+            document_id: 文档ID
+            success: 是否成功
+            duration: 处理耗时(秒)
+            stages_completed: 完成的处理阶段列表
+            error: 错误信息（如果失败）
+            **kwargs: 额外的日志字段
+        """
+        status = "成功" if success else "失败"
+        level = cls.info if success else cls.error
+        error_info = f" - 错误: {error}" if error else ""
+        stages_info = (
+            f" - 完成阶段: {len(stages_completed or [])}" if stages_completed else ""
+        )
+
+        level(
+            f"RAG文档处理{status}: 知识库ID {kb_id} - 文档ID {document_id} - 耗时: {duration:.2f}秒{stages_info}{error_info}",
+            rag_operation_type="document_complete",
+            kb_id=kb_id,
+            document_id=document_id,
+            processing_success=success,
+            processing_duration=duration,
+            stages_completed=stages_completed or [],
+            error_message=error,
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_index_build_start(
+        cls,
+        kb_id: int,
+        index_type: str,
+        document_count: int = 0,
+        config: Dict = None,
+        **kwargs,
+    ):
+        """记录RAG索引构建开始日志
+
+        Args:
+            kb_id: 知识库ID
+            index_type: 索引类型
+            document_count: 文档数量
+            config: 索引配置
+            **kwargs: 额外的日志字段
+        """
+        cls.info(
+            f"RAG索引构建开始: 知识库ID {kb_id} - 索引类型: {index_type} - 文档数量: {document_count}",
+            rag_operation_type="index_build_start",
+            kb_id=kb_id,
+            index_type=index_type,
+            document_count=document_count,
+            index_config=config or {},
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_index_build_complete(
+        cls,
+        kb_id: int,
+        index_type: str,
+        success: bool,
+        duration: float,
+        index_size: int = 0,
+        **kwargs,
+    ):
+        """记录RAG索引构建完成日志
+
+        Args:
+            kb_id: 知识库ID
+            index_type: 索引类型
+            success: 是否成功
+            duration: 构建耗时(秒)
+            index_size: 索引大小
+            **kwargs: 额外的日志字段
+        """
+        status = "成功" if success else "失败"
+        level = cls.info if success else cls.error
+        level(
+            f"RAG索引构建{status}: 知识库ID {kb_id} - 索引类型: {index_type} - 耗时: {duration:.2f}秒 - 索引大小: {index_size}",
+            rag_operation_type="index_build_complete",
+            kb_id=kb_id,
+            index_type=index_type,
+            build_success=success,
+            build_duration=duration,
+            index_size=index_size,
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_cache_operation(
+        cls,
+        operation: str,
+        cache_key: str,
+        hit: bool = None,
+        data_size: int = 0,
+        duration: float = 0.0,
+        **kwargs,
+    ):
+        """记录RAG缓存操作日志
+
+        Args:
+            operation: 缓存操作类型 (get, set, delete, clear)
+            cache_key: 缓存键
+            hit: 是否命中（仅对get操作有效）
+            data_size: 数据大小
+            duration: 操作耗时(秒)
+            **kwargs: 额外的日志字段
+        """
+        hit_info = ""
+        if operation == "get" and hit is not None:
+            hit_info = f" - {'命中' if hit else '未命中'}"
+
+        size_info = f" - 数据大小: {data_size}" if data_size > 0 else ""
+
+        cls.debug(
+            f"RAG缓存操作: {operation} - 键: {cache_key}{hit_info}{size_info} - 耗时: {duration:.3f}秒",
+            rag_operation_type="cache_operation",
+            cache_operation=operation,
+            cache_key=cache_key,
+            cache_hit=hit,
+            data_size=data_size,
+            operation_duration=duration,
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_model_load(
+        cls,
+        model_type: str,
+        model_name: str,
+        success: bool,
+        duration: float = 0.0,
+        model_size: int = 0,
+        **kwargs,
+    ):
+        """记录RAG模型加载日志
+
+        Args:
+            model_type: 模型类型 (embedding, rerank, llm)
+            model_name: 模型名称
+            success: 是否成功
+            duration: 加载耗时(秒)
+            model_size: 模型大小
+            **kwargs: 额外的日志字段
+        """
+        status = "成功" if success else "失败"
+        level = cls.info if success else cls.error
+        size_info = f" - 模型大小: {model_size}" if model_size > 0 else ""
+
+        level(
+            f"RAG模型加载{status}: 类型: {model_type} - 名称: {model_name} - 耗时: {duration:.2f}秒{size_info}",
+            rag_operation_type="model_load",
+            model_type=model_type,
+            model_name=model_name,
+            load_success=success,
+            load_duration=duration,
+            model_size=model_size,
+            **kwargs,
+        )
+
+    @classmethod
+    def rag_batch_operation(
+        cls,
+        operation: str,
+        batch_size: int,
+        total_items: int,
+        current_batch: int,
+        total_batches: int,
+        **kwargs,
+    ):
+        """记录RAG批处理操作日志
+
+        Args:
+            operation: 操作类型
+            batch_size: 批处理大小
+            total_items: 总项目数
+            current_batch: 当前批次
+            total_batches: 总批次数
+            **kwargs: 额外的日志字段
+        """
+        progress = (current_batch / total_batches * 100) if total_batches > 0 else 0
+
+        cls.debug(
+            f"RAG批处理: {operation} - 批次 {current_batch}/{total_batches} - 批大小: {batch_size} - 进度: {progress:.1f}%",
+            rag_operation_type="batch_operation",
+            operation=operation,
+            batch_size=batch_size,
+            total_items=total_items,
+            current_batch=current_batch,
+            total_batches=total_batches,
+            progress_percent=progress,
+            **kwargs,
+        )
