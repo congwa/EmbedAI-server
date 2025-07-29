@@ -1,34 +1,32 @@
-"""向后兼容的日志模块入口
-
-为了保持向后兼容性，这个文件现在导入新的模块化日志系统。
-原有的使用方式保持不变。
 """
+RAG相关日志记录模块
+"""
+from typing import Dict, Any, List
+from .base_logger import BaseLogger
 
-# 导入新的模块化日志系统
-from .logging import (
-    Logger,
-    RAGTraceContext,
-    trace_context,
-    BaseLogger,
-    APILogger,
-    DatabaseLogger,
-    ServiceLogger,
-    RAGLogger,
-    PerformanceLogger,
-)
 
-# 保持向后兼容性
-__all__ = [
-    'Logger',
-    'RAGTraceContext', 
-    'trace_context',
-    'BaseLogger',
-    'APILogger',
-    'DatabaseLogger',
-    'ServiceLogger',
-    'RAGLogger',
-    'PerformanceLogger',
-]
+class RAGLogger(BaseLogger):
+    """RAG相关日志记录器"""
+
+    @classmethod
+    def rag_operation(cls, operation: str, kb_id: int = None, **kwargs):
+        """记录RAG操作日志
+
+        Args:
+            operation: 操作类型
+            kb_id: 知识库ID
+            **kwargs: 额外的日志字段
+        """
+        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
+        cls.info(
+            f"RAG操作: {operation}{kb_info}",
+            rag_operation_type=operation,
+            kb_id=kb_id,
+            **kwargs
+        )
+
+    @classmethod
+    def rag_api_request(
         cls,
         endpoint: str,
         method: str = "POST",
@@ -47,17 +45,19 @@ __all__ = [
             params: 请求参数
             **kwargs: 额外的日志字段
         """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id is not None else ""
-        user_info = f" - 用户ID: {user_id}" if user_id is not None else ""
+        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
+        user_info = f" - 用户ID: {user_id}" if user_id else ""
+        params_info = f" - 参数: {params}" if params else ""
+        
         cls.info(
-            f"RAG API请求: {method} {endpoint}{kb_info}{user_info}",
+            f"RAG API请求: {method} {endpoint}{kb_info}{user_info}{params_info}",
             rag_operation_type="api_request",
             api_endpoint=endpoint,
             api_method=method,
             kb_id=kb_id,
             user_id=user_id,
-            api_params=params or {},
-            **kwargs,
+            api_params=params,
+            **kwargs
         )
 
     @classmethod
@@ -82,17 +82,21 @@ __all__ = [
             result_summary: 结果摘要
             **kwargs: 额外的日志字段
         """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id is not None else ""
-        cls.info(
-            f"RAG API响应: {method} {endpoint} - 状态码: {status_code} - 处理时间: {process_time:.2f}秒{kb_info}",
+        status_text = "成功" if 200 <= status_code < 300 else "失败"
+        level = cls.info if 200 <= status_code < 300 else cls.error
+        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
+        result_info = f" - 结果: {result_summary}" if result_summary else ""
+        
+        level(
+            f"RAG API响应: {method} {endpoint} - 状态码: {status_code} - {status_text} - 耗时: {process_time:.3f}秒{kb_info}{result_info}",
             rag_operation_type="api_response",
             api_endpoint=endpoint,
             api_method=method,
             status_code=status_code,
             process_time=process_time,
             kb_id=kb_id,
-            result_summary=result_summary or {},
-            **kwargs,
+            result_summary=result_summary,
+            **kwargs
         )
 
     @classmethod
@@ -115,17 +119,18 @@ __all__ = [
             user_id: 用户ID
             **kwargs: 额外的日志字段
         """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id is not None else ""
-        user_info = f" - 用户ID: {user_id}" if user_id is not None else ""
+        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
+        user_info = f" - 用户ID: {user_id}" if user_id else ""
+        
         cls.error(
-            f"RAG API错误: {method} {endpoint}{kb_info}{user_info} - 错误: {error}",
+            f"RAG API错误: {method} {endpoint} - 错误: {error}{kb_info}{user_info}",
             rag_operation_type="api_error",
             api_endpoint=endpoint,
             api_method=method,
             error_message=error,
             kb_id=kb_id,
             user_id=user_id,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -140,13 +145,14 @@ __all__ = [
             config: 训练配置
             **kwargs: 额外的日志字段
         """
+        config_info = f" - 配置: {config}" if config else ""
         cls.info(
-            f"RAG训练开始: 知识库ID {kb_id} - 文档数量: {document_count}",
+            f"RAG训练开始: 知识库ID {kb_id} - 文档数量: {document_count}{config_info}",
             rag_operation_type="training_start",
             kb_id=kb_id,
             document_count=document_count,
-            training_config=config or {},
-            **kwargs,
+            training_config=config,
+            **kwargs
         )
 
     @classmethod
@@ -169,14 +175,16 @@ __all__ = [
         """
         status = "成功" if success else "失败"
         level = cls.info if success else cls.error
+        result_info = f" - 结果: {result_summary}" if result_summary else ""
+        
         level(
-            f"RAG训练{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒",
+            f"RAG训练{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒{result_info}",
             rag_operation_type="training_complete",
             kb_id=kb_id,
             training_success=success,
             training_duration=duration,
-            result_summary=result_summary or {},
-            **kwargs,
+            result_summary=result_summary,
+            **kwargs
         )
 
     @classmethod
@@ -191,13 +199,14 @@ __all__ = [
             config: 处理配置
             **kwargs: 额外的日志字段
         """
+        config_info = f" - 配置: {config}" if config else ""
         cls.info(
-            f"RAG文档处理开始: 知识库ID {kb_id} - 文档数量: {document_count}",
+            f"RAG文档处理开始: 知识库ID {kb_id} - 文档数量: {document_count}{config_info}",
             rag_operation_type="document_processing_start",
             kb_id=kb_id,
             document_count=document_count,
-            processing_config=config or {},
-            **kwargs,
+            processing_config=config,
+            **kwargs
         )
 
     @classmethod
@@ -218,18 +227,17 @@ __all__ = [
             progress: 进度信息
             **kwargs: 额外的日志字段
         """
-        progress_info = ""
-        if progress and "current" in progress and "total" in progress:
-            progress_info = f" - 进度: {progress['current']}/{progress['total']}"
-
-        cls.info(
-            f"RAG文档处理: 知识库ID {kb_id} - 文档ID {document_id} - 标题: {document_title}{progress_info}",
+        title_info = f" - 标题: {document_title}" if document_title else ""
+        progress_info = f" - 进度: {progress}" if progress else ""
+        
+        cls.debug(
+            f"RAG文档处理开始: 知识库ID {kb_id} - 文档ID {document_id}{title_info}{progress_info}",
             rag_operation_type="document_start",
             kb_id=kb_id,
             document_id=document_id,
             document_title=document_title,
-            progress=progress or {},
-            **kwargs,
+            progress=progress,
+            **kwargs
         )
 
     @classmethod
@@ -252,10 +260,8 @@ __all__ = [
             progress: 进度信息
             **kwargs: 额外的日志字段
         """
-        progress_info = ""
-        if progress and "current" in progress and "total" in progress:
-            progress_info = f" - 进度: {progress['current']}/{progress['total']}"
-
+        progress_info = f" - 进度: {progress}" if progress else ""
+        
         cls.error(
             f"RAG文档处理错误: 知识库ID {kb_id} - 文档ID {document_id} - 阶段: {stage} - 错误: {error}{progress_info}",
             rag_operation_type="document_error",
@@ -263,8 +269,8 @@ __all__ = [
             document_id=document_id,
             processing_stage=stage,
             error_message=error,
-            progress=progress or {},
-            **kwargs,
+            progress=progress,
+            **kwargs
         )
 
     @classmethod
@@ -279,13 +285,14 @@ __all__ = [
             file_type: 文件类型
             **kwargs: 额外的日志字段
         """
+        type_info = f" - 类型: {file_type}" if file_type else ""
         cls.debug(
-            f"RAG文档提取开始: 文档ID {document_id} - 文件: {file_path} - 类型: {file_type}",
+            f"RAG文档提取开始: 文档ID {document_id} - 文件: {file_path}{type_info}",
             rag_operation_type="extraction_start",
             document_id=document_id,
             file_path=file_path,
             file_type=file_type,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -301,12 +308,12 @@ __all__ = [
             **kwargs: 额外的日志字段
         """
         cls.debug(
-            f"RAG文档提取成功: 文档ID {document_id} - 内容长度: {content_length} - 耗时: {extraction_time:.2f}秒",
+            f"RAG文档提取成功: 文档ID {document_id} - 内容长度: {content_length} - 耗时: {extraction_time:.3f}秒",
             rag_operation_type="extraction_success",
             document_id=document_id,
             content_length=content_length,
             extraction_time=extraction_time,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -327,7 +334,7 @@ __all__ = [
             document_id=document_id,
             content_length=content_length,
             chunk_size=chunk_size,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -343,12 +350,12 @@ __all__ = [
             **kwargs: 额外的日志字段
         """
         cls.debug(
-            f"RAG文本分块成功: 文档ID {document_id} - 分块数量: {chunk_count} - 耗时: {chunking_time:.2f}秒",
+            f"RAG文本分块成功: 文档ID {document_id} - 分块数量: {chunk_count} - 耗时: {chunking_time:.3f}秒",
             rag_operation_type="chunking_success",
             document_id=document_id,
             chunk_count=chunk_count,
             chunking_time=chunking_time,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -369,15 +376,18 @@ __all__ = [
             batch_size: 批处理大小
             **kwargs: 额外的日志字段
         """
-        doc_info = f"文档ID {document_id} - " if document_id else ""
+        doc_info = f" - 文档ID: {document_id}" if document_id else ""
+        model_info = f" - 模型: {model}" if model else ""
+        batch_info = f" - 批大小: {batch_size}" if batch_size > 0 else ""
+        
         cls.debug(
-            f"RAG向量化开始: {doc_info}分块数量: {chunk_count} - 模型: {model} - 批大小: {batch_size}",
+            f"RAG向量化开始: 分块数量: {chunk_count}{doc_info}{model_info}{batch_info}",
             rag_operation_type="embedding_start",
             document_id=document_id,
             chunk_count=chunk_count,
             embedding_model=model,
             batch_size=batch_size,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -400,15 +410,20 @@ __all__ = [
             progress: 进度信息
             **kwargs: 额外的日志字段
         """
+        progress_percent = (batch_num / total_batches * 100) if total_batches > 0 else 0
+        model_info = f" - 模型: {model}" if model else ""
+        progress_info = f" - 进度详情: {progress}" if progress else ""
+        
         cls.debug(
-            f"RAG向量化批处理: 批次 {batch_num}/{total_batches} - 批大小: {batch_size} - 模型: {model}",
+            f"RAG向量化批处理: 批次 {batch_num}/{total_batches} - 批大小: {batch_size} - 进度: {progress_percent:.1f}%{model_info}{progress_info}",
             rag_operation_type="embedding_batch",
-            batch_number=batch_num,
+            batch_num=batch_num,
             total_batches=total_batches,
             batch_size=batch_size,
+            progress_percent=progress_percent,
             embedding_model=model,
-            progress=progress or {},
-            **kwargs,
+            progress=progress,
+            **kwargs
         )
 
     @classmethod
@@ -429,15 +444,17 @@ __all__ = [
             model: 向量化模型
             **kwargs: 额外的日志字段
         """
-        doc_info = f"文档ID {document_id} - " if document_id else ""
+        doc_info = f" - 文档ID: {document_id}" if document_id else ""
+        model_info = f" - 模型: {model}" if model else ""
+        
         cls.debug(
-            f"RAG向量化成功: {doc_info}向量数量: {embedding_count} - 耗时: {embedding_time:.2f}秒 - 模型: {model}",
+            f"RAG向量化成功: 向量数量: {embedding_count} - 耗时: {embedding_time:.3f}秒{doc_info}{model_info}",
             rag_operation_type="embedding_success",
             document_id=document_id,
             embedding_count=embedding_count,
             embedding_time=embedding_time,
             embedding_model=model,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -460,17 +477,20 @@ __all__ = [
             user_id: 用户ID
             **kwargs: 额外的日志字段
         """
-        query_preview = query[:100] + "..." if len(query) > 100 else query
+        method_info = f" - 方法: {method}" if method else ""
         user_info = f" - 用户ID: {user_id}" if user_id else ""
+        params_info = f" - 参数: {params}" if params else ""
+        query_preview = query[:100] + "..." if len(query) > 100 else query
+        
         cls.info(
-            f"RAG查询开始: 知识库ID {kb_id} - 查询: '{query_preview}' - 方法: {method}{user_info}",
+            f"RAG查询开始: 知识库ID {kb_id} - 查询: {query_preview}{method_info}{user_info}{params_info}",
             rag_operation_type="query_start",
             kb_id=kb_id,
             query=query,
-            query_method=method,
-            query_params=params or {},
+            retrieval_method=method,
+            query_params=params,
             user_id=user_id,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -493,18 +513,19 @@ __all__ = [
             result_count: 结果数量
             **kwargs: 额外的日志字段
         """
-        query_preview = query[:50] + "..." if len(query) > 50 else query
         status = "成功" if success else "失败"
         level = cls.info if success else cls.error
+        query_preview = query[:100] + "..." if len(query) > 100 else query
+        
         level(
-            f"RAG查询{status}: 知识库ID {kb_id} - 查询: '{query_preview}' - 结果数: {result_count} - 耗时: {duration:.2f}秒",
+            f"RAG查询{status}: 知识库ID {kb_id} - 查询: {query_preview} - 耗时: {duration:.3f}秒 - 结果数量: {result_count}",
             rag_operation_type="query_complete",
             kb_id=kb_id,
             query=query,
             query_success=success,
             query_duration=duration,
             result_count=result_count,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -527,21 +548,24 @@ __all__ = [
             method: 检索方法
             **kwargs: 额外的日志字段
         """
-        query_preview = query[:50] + "..." if len(query) > 50 else query
-        avg_score = sum(scores) / len(scores) if scores else 0.0
-        max_score = max(scores) if scores else 0.0
-
+        method_info = f" - 方法: {method}" if method else ""
+        scores_info = ""
+        if scores:
+            avg_score = sum(scores) / len(scores)
+            max_score = max(scores)
+            scores_info = f" - 平均分数: {avg_score:.3f} - 最高分数: {max_score:.3f}"
+        
+        query_preview = query[:100] + "..." if len(query) > 100 else query
+        
         cls.debug(
-            f"RAG检索结果: 知识库ID {kb_id} - 查询: '{query_preview}' - 方法: {method} - 结果数: {result_count} - 平均分: {avg_score:.3f} - 最高分: {max_score:.3f}",
+            f"RAG检索结果: 知识库ID {kb_id} - 查询: {query_preview} - 结果数量: {result_count}{method_info}{scores_info}",
             rag_operation_type="retrieval_result",
             kb_id=kb_id,
             query=query,
-            retrieval_method=method,
             result_count=result_count,
-            scores=scores or [],
-            avg_score=avg_score,
-            max_score=max_score,
-            **kwargs,
+            retrieval_scores=scores,
+            retrieval_method=method,
+            **kwargs
         )
 
     @classmethod
@@ -564,14 +588,15 @@ __all__ = [
         """
         status = "通过" if granted else "拒绝"
         level = cls.debug if granted else cls.warning
+        
         level(
-            f"RAG权限检查{status}: 知识库ID {kb_id} - 用户ID {user_id} - 所需权限: {required_permission}",
+            f"RAG权限检查: 知识库ID {kb_id} - 用户ID {user_id} - 权限: {required_permission} - 结果: {status}",
             rag_operation_type="permission_check",
             kb_id=kb_id,
             user_id=user_id,
             required_permission=required_permission,
             permission_granted=granted,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -589,14 +614,15 @@ __all__ = [
         """
         kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
         user_info = f" - 用户ID: {user_id}" if user_id else ""
+        
         cls.debug(
             f"RAG服务调用开始: {service}.{method}{kb_info}{user_info}",
             rag_operation_type="service_start",
-            service=service,
-            method=method,
+            service_name=service,
+            service_method=method,
             kb_id=kb_id,
             user_id=user_id,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -617,14 +643,16 @@ __all__ = [
             result_summary: 结果摘要
             **kwargs: 额外的日志字段
         """
+        result_info = f" - 结果: {result_summary}" if result_summary else ""
+        
         cls.debug(
-            f"RAG服务调用成功: {service}.{method} - 耗时: {duration:.2f}秒",
+            f"RAG服务调用成功: {service}.{method} - 耗时: {duration:.3f}秒{result_info}",
             rag_operation_type="service_success",
-            service=service,
-            method=method,
+            service_name=service,
+            service_method=method,
             service_duration=duration,
-            result_summary=result_summary or {},
-            **kwargs,
+            result_summary=result_summary,
+            **kwargs
         )
 
     @classmethod
@@ -641,142 +669,13 @@ __all__ = [
             **kwargs: 额外的日志字段
         """
         cls.error(
-            f"RAG服务调用失败: {service}.{method} - 错误: {error} - 耗时: {duration:.2f}秒",
+            f"RAG服务调用错误: {service}.{method} - 错误: {error} - 耗时: {duration:.3f}秒",
             rag_operation_type="service_error",
-            service=service,
-            method=method,
+            service_name=service,
+            service_method=method,
             error_message=error,
             service_duration=duration,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_performance_metrics(
-        cls,
-        operation: str,
-        duration: float,
-        memory_usage: int = 0,
-        cpu_usage: float = 0.0,
-        kb_id: int = None,
-        **kwargs,
-    ):
-        """记录RAG性能指标日志
-
-        Args:
-            operation: 操作类型
-            duration: 执行耗时(秒)
-            memory_usage: 内存使用量(字节)
-            cpu_usage: CPU使用率(百分比)
-            kb_id: 知识库ID
-            **kwargs: 额外的日志字段
-        """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
-        memory_mb = memory_usage / 1024 / 1024 if memory_usage > 0 else 0
-        cls.debug(
-            f"RAG性能指标: {operation} - 耗时: {duration:.2f}秒 - 内存: {memory_mb:.1f}MB - CPU: {cpu_usage:.1f}%{kb_info}",
-            rag_operation_type="performance_metrics",
-            operation=operation,
-            duration=duration,
-            memory_usage=memory_usage,
-            memory_mb=memory_mb,
-            cpu_usage=cpu_usage,
-            kb_id=kb_id,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_retry_attempt(
-        cls, operation: str, attempt: int, max_retries: int, **kwargs
-    ):
-        """记录RAG重试尝试日志
-
-        Args:
-            operation: 操作名称
-            attempt: 当前尝试次数
-            max_retries: 最大重试次数
-            **kwargs: 额外的日志字段
-        """
-        cls.warning(
-            f"RAG重试尝试: {operation} - 尝试 {attempt}/{max_retries}",
-            rag_operation_type="retry_attempt",
-            operation=operation,
-            attempt_number=attempt,
-            max_retries=max_retries,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_retry_success(cls, operation: str, final_attempt: int, **kwargs):
-        """记录RAG重试成功日志
-
-        Args:
-            operation: 操作名称
-            final_attempt: 最终成功的尝试次数
-            **kwargs: 额外的日志字段
-        """
-        cls.info(
-            f"RAG重试成功: {operation} - 第 {final_attempt} 次尝试成功",
-            rag_operation_type="retry_success",
-            operation=operation,
-            final_attempt=final_attempt,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_retry_failed(cls, operation: str, attempt: int, error: str, **kwargs):
-        """记录RAG重试失败日志
-
-        Args:
-            operation: 操作名称
-            attempt: 尝试次数
-            error: 错误信息
-            **kwargs: 额外的日志字段
-        """
-        cls.warning(
-            f"RAG重试失败: {operation} - 第 {attempt} 次尝试失败 - 错误: {error}",
-            rag_operation_type="retry_failed",
-            operation=operation,
-            attempt_number=attempt,
-            error_message=error,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_retry_exhausted(
-        cls, operation: str, total_attempts: int, final_error: str, **kwargs
-    ):
-        """记录RAG重试耗尽日志
-
-        Args:
-            operation: 操作名称
-            total_attempts: 总尝试次数
-            final_error: 最终错误信息
-            **kwargs: 额外的日志字段
-        """
-        cls.error(
-            f"RAG重试耗尽: {operation} - 总共尝试 {total_attempts} 次均失败 - 最终错误: {final_error}",
-            rag_operation_type="retry_exhausted",
-            operation=operation,
-            total_attempts=total_attempts,
-            final_error=final_error,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_performance_metrics(cls, operation: str, duration: float, **metrics):
-        """记录RAG性能指标日志
-
-        Args:
-            operation: 操作名称
-            duration: 操作耗时(秒)
-            **metrics: 其他性能指标
-        """
-        cls.debug(
-            f"RAG性能指标: {operation} - 耗时: {duration:.3f}秒",
-            rag_operation_type="performance_metrics",
-            operation=operation,
-            duration=duration,
-            **metrics,
+            **kwargs
         )
 
     @classmethod
@@ -803,16 +702,18 @@ __all__ = [
         """
         status = "成功" if success else "失败"
         level = cls.info if success else cls.error
+        result_info = f" - 结果: {result_summary}" if result_summary else ""
+        
         level(
-            f"RAG文档处理{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒 - 成功: {processed_count} - 失败: {failed_count}",
+            f"RAG文档处理{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒 - 成功: {processed_count} - 失败: {failed_count}{result_info}",
             rag_operation_type="document_processing_complete",
             kb_id=kb_id,
             processing_success=success,
             processing_duration=duration,
             processed_count=processed_count,
             failed_count=failed_count,
-            result_summary=result_summary or {},
-            **kwargs,
+            result_summary=result_summary,
+            **kwargs
         )
 
     @classmethod
@@ -838,22 +739,20 @@ __all__ = [
             **kwargs: 额外的日志字段
         """
         status = "成功" if success else "失败"
-        level = cls.info if success else cls.error
+        level = cls.debug if success else cls.error
+        stages_info = f" - 完成阶段: {stages_completed}" if stages_completed else ""
         error_info = f" - 错误: {error}" if error else ""
-        stages_info = (
-            f" - 完成阶段: {len(stages_completed or [])}" if stages_completed else ""
-        )
-
+        
         level(
-            f"RAG文档处理{status}: 知识库ID {kb_id} - 文档ID {document_id} - 耗时: {duration:.2f}秒{stages_info}{error_info}",
+            f"RAG文档处理{status}: 知识库ID {kb_id} - 文档ID {document_id} - 耗时: {duration:.3f}秒{stages_info}{error_info}",
             rag_operation_type="document_complete",
             kb_id=kb_id,
             document_id=document_id,
-            processing_success=success,
-            processing_duration=duration,
-            stages_completed=stages_completed or [],
+            document_success=success,
+            document_duration=duration,
+            stages_completed=stages_completed,
             error_message=error,
-            **kwargs,
+            **kwargs
         )
 
     @classmethod
@@ -874,14 +773,16 @@ __all__ = [
             config: 索引配置
             **kwargs: 额外的日志字段
         """
+        config_info = f" - 配置: {config}" if config else ""
+        
         cls.info(
-            f"RAG索引构建开始: 知识库ID {kb_id} - 索引类型: {index_type} - 文档数量: {document_count}",
+            f"RAG索引构建开始: 知识库ID {kb_id} - 索引类型: {index_type} - 文档数量: {document_count}{config_info}",
             rag_operation_type="index_build_start",
             kb_id=kb_id,
             index_type=index_type,
             document_count=document_count,
-            index_config=config or {},
-            **kwargs,
+            index_config=config,
+            **kwargs
         )
 
     @classmethod
@@ -906,119 +807,15 @@ __all__ = [
         """
         status = "成功" if success else "失败"
         level = cls.info if success else cls.error
+        size_info = f" - 索引大小: {index_size}" if index_size > 0 else ""
+        
         level(
-            f"RAG索引构建{status}: 知识库ID {kb_id} - 索引类型: {index_type} - 耗时: {duration:.2f}秒 - 索引大小: {index_size}",
+            f"RAG索引构建{status}: 知识库ID {kb_id} - 索引类型: {index_type} - 耗时: {duration:.2f}秒{size_info}",
             rag_operation_type="index_build_complete",
             kb_id=kb_id,
             index_type=index_type,
             build_success=success,
             build_duration=duration,
             index_size=index_size,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_cache_operation(
-        cls,
-        operation: str,
-        cache_key: str,
-        hit: bool = None,
-        data_size: int = 0,
-        duration: float = 0.0,
-        **kwargs,
-    ):
-        """记录RAG缓存操作日志
-
-        Args:
-            operation: 缓存操作类型 (get, set, delete, clear)
-            cache_key: 缓存键
-            hit: 是否命中（仅对get操作有效）
-            data_size: 数据大小
-            duration: 操作耗时(秒)
-            **kwargs: 额外的日志字段
-        """
-        hit_info = ""
-        if operation == "get" and hit is not None:
-            hit_info = f" - {'命中' if hit else '未命中'}"
-
-        size_info = f" - 数据大小: {data_size}" if data_size > 0 else ""
-
-        cls.debug(
-            f"RAG缓存操作: {operation} - 键: {cache_key}{hit_info}{size_info} - 耗时: {duration:.3f}秒",
-            rag_operation_type="cache_operation",
-            cache_operation=operation,
-            cache_key=cache_key,
-            cache_hit=hit,
-            data_size=data_size,
-            operation_duration=duration,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_model_load(
-        cls,
-        model_type: str,
-        model_name: str,
-        success: bool,
-        duration: float = 0.0,
-        model_size: int = 0,
-        **kwargs,
-    ):
-        """记录RAG模型加载日志
-
-        Args:
-            model_type: 模型类型 (embedding, rerank, llm)
-            model_name: 模型名称
-            success: 是否成功
-            duration: 加载耗时(秒)
-            model_size: 模型大小
-            **kwargs: 额外的日志字段
-        """
-        status = "成功" if success else "失败"
-        level = cls.info if success else cls.error
-        size_info = f" - 模型大小: {model_size}" if model_size > 0 else ""
-
-        level(
-            f"RAG模型加载{status}: 类型: {model_type} - 名称: {model_name} - 耗时: {duration:.2f}秒{size_info}",
-            rag_operation_type="model_load",
-            model_type=model_type,
-            model_name=model_name,
-            load_success=success,
-            load_duration=duration,
-            model_size=model_size,
-            **kwargs,
-        )
-
-    @classmethod
-    def rag_batch_operation(
-        cls,
-        operation: str,
-        batch_size: int,
-        total_items: int,
-        current_batch: int,
-        total_batches: int,
-        **kwargs,
-    ):
-        """记录RAG批处理操作日志
-
-        Args:
-            operation: 操作类型
-            batch_size: 批处理大小
-            total_items: 总项目数
-            current_batch: 当前批次
-            total_batches: 总批次数
-            **kwargs: 额外的日志字段
-        """
-        progress = (current_batch / total_batches * 100) if total_batches > 0 else 0
-
-        cls.debug(
-            f"RAG批处理: {operation} - 批次 {current_batch}/{total_batches} - 批大小: {batch_size} - 进度: {progress:.1f}%",
-            rag_operation_type="batch_operation",
-            operation=operation,
-            batch_size=batch_size,
-            total_items=total_items,
-            current_batch=current_batch,
-            total_batches=total_batches,
-            progress_percent=progress,
-            **kwargs,
+            **kwargs
         )
