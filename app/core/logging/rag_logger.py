@@ -657,7 +657,12 @@ class RAGLogger(BaseLogger):
 
     @classmethod
     def rag_service_error(
-        cls, service: str, method: str, error: str, duration: float = 0.0, **kwargs
+        cls,
+        service: str,
+        method: str,
+        error: str,
+        duration: float,
+        **kwargs,
     ):
         """记录RAG服务调用错误日志
 
@@ -675,147 +680,5 @@ class RAGLogger(BaseLogger):
             service_method=method,
             error_message=error,
             service_duration=duration,
-            **kwargs
-        )
-
-    @classmethod
-    def rag_document_processing_complete(
-        cls,
-        kb_id: int,
-        success: bool,
-        duration: float,
-        processed_count: int = 0,
-        failed_count: int = 0,
-        result_summary: Dict = None,
-        **kwargs,
-    ):
-        """记录RAG文档处理完成日志
-
-        Args:
-            kb_id: 知识库ID
-            success: 是否成功
-            duration: 处理耗时(秒)
-            processed_count: 成功处理的文档数量
-            failed_count: 处理失败的文档数量
-            result_summary: 结果摘要
-            **kwargs: 额外的日志字段
-        """
-        status = "成功" if success else "失败"
-        level = cls.info if success else cls.error
-        result_info = f" - 结果: {result_summary}" if result_summary else ""
-        
-        level(
-            f"RAG文档处理{status}: 知识库ID {kb_id} - 耗时: {duration:.2f}秒 - 成功: {processed_count} - 失败: {failed_count}{result_info}",
-            rag_operation_type="document_processing_complete",
-            kb_id=kb_id,
-            processing_success=success,
-            processing_duration=duration,
-            processed_count=processed_count,
-            failed_count=failed_count,
-            result_summary=result_summary,
-            **kwargs
-        )
-
-    @classmethod
-    def rag_document_complete(
-        cls,
-        kb_id: int,
-        document_id: int,
-        success: bool,
-        duration: float,
-        stages_completed: List[str] = None,
-        error: str = "",
-        **kwargs,
-    ):
-        """记录RAG单个文档处理完成日志
-
-        Args:
-            kb_id: 知识库ID
-            document_id: 文档ID
-            success: 是否成功
-            duration: 处理耗时(秒)
-            stages_completed: 完成的处理阶段列表
-            error: 错误信息（如果失败）
-            **kwargs: 额外的日志字段
-        """
-        status = "成功" if success else "失败"
-        level = cls.debug if success else cls.error
-        stages_info = f" - 完成阶段: {stages_completed}" if stages_completed else ""
-        error_info = f" - 错误: {error}" if error else ""
-        
-        level(
-            f"RAG文档处理{status}: 知识库ID {kb_id} - 文档ID {document_id} - 耗时: {duration:.3f}秒{stages_info}{error_info}",
-            rag_operation_type="document_complete",
-            kb_id=kb_id,
-            document_id=document_id,
-            document_success=success,
-            document_duration=duration,
-            stages_completed=stages_completed,
-            error_message=error,
-            **kwargs
-        )
-
-    @classmethod
-    def rag_index_build_start(
-        cls,
-        kb_id: int,
-        index_type: str,
-        document_count: int = 0,
-        config: Dict = None,
-        **kwargs,
-    ):
-        """记录RAG索引构建开始日志
-
-        Args:
-            kb_id: 知识库ID
-            index_type: 索引类型
-            document_count: 文档数量
-            config: 索引配置
-            **kwargs: 额外的日志字段
-        """
-        config_info = f" - 配置: {config}" if config else ""
-        
-        cls.info(
-            f"RAG索引构建开始: 知识库ID {kb_id} - 索引类型: {index_type} - 文档数量: {document_count}{config_info}",
-            rag_operation_type="index_build_start",
-            kb_id=kb_id,
-            index_type=index_type,
-            document_count=document_count,
-            index_config=config,
-            **kwargs
-        )
-
-    @classmethod
-    def rag_index_build_complete(
-        cls,
-        kb_id: int,
-        index_type: str,
-        success: bool,
-        duration: float,
-        index_size: int = 0,
-        **kwargs,
-    ):
-        """记录RAG索引构建完成日志
-
-        Args:
-            kb_id: 知识库ID
-            index_type: 索引类型
-            success: 是否成功
-            duration: 构建耗时(秒)
-            index_size: 索引大小
-            **kwargs: 额外的日志字段
-        """
-        status = "成功" if success else "失败"
-        level = cls.info if success else cls.error
-        size_info = f" - 索引大小: {index_size}" if index_size > 0 else ""
-        
-        level(
-            f"RAG索引构建{status}: 知识库ID {kb_id} - 索引类型: {index_type} - 耗时: {duration:.2f}秒{size_info}",
-            rag_operation_type="index_build_complete",
-            kb_id=kb_id,
-            index_type=index_type,
-            build_success=success,
-            build_duration=duration,
-            index_size=index_size,
             **kwargs
         )
