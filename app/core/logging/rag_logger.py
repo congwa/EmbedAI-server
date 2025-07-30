@@ -34,7 +34,7 @@ class RAGLogger(BaseLogger):
         user_id: int = None,
         params: Dict = None,
         **kwargs,
-    ):
+    ) -> str:
         """记录RAG API请求日志
 
         Args:
@@ -44,14 +44,13 @@ class RAGLogger(BaseLogger):
             user_id: 用户ID
             params: 请求参数
             **kwargs: 额外的日志字段
+
+        Returns:
+            str: 操作ID
         """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
-        user_info = f" - 用户ID: {user_id}" if user_id else ""
-        params_info = f" - 参数: {params}" if params else ""
-        
-        cls.info(
-            f"RAG API请求: {method} {endpoint}{kb_info}{user_info}{params_info}",
-            rag_operation_type="api_request",
+        return cls.operation_start(
+            operation_type="rag_api",
+            message=f"RAG API请求: {method} {endpoint}",
             api_endpoint=endpoint,
             api_method=method,
             kb_id=kb_id,
@@ -63,10 +62,10 @@ class RAGLogger(BaseLogger):
     @classmethod
     def rag_api_response(
         cls,
+        operation_id: str,
         endpoint: str,
         method: str = "POST",
         status_code: int = 200,
-        process_time: float = 0.0,
         kb_id: int = None,
         result_summary: Dict = None,
         **kwargs,
@@ -74,37 +73,47 @@ class RAGLogger(BaseLogger):
         """记录RAG API响应日志
 
         Args:
+            operation_id: 操作ID
             endpoint: API端点
             method: HTTP方法
             status_code: 响应状态码
-            process_time: 处理时间(秒)
             kb_id: 知识库ID
             result_summary: 结果摘要
             **kwargs: 额外的日志字段
         """
-        status_text = "成功" if 200 <= status_code < 300 else "失败"
-        level = cls.info if 200 <= status_code < 300 else cls.error
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
-        result_info = f" - 结果: {result_summary}" if result_summary else ""
-        
-        level(
-            f"RAG API响应: {method} {endpoint} - 状态码: {status_code} - {status_text} - 耗时: {process_time:.3f}秒{kb_info}{result_info}",
-            rag_operation_type="api_response",
-            api_endpoint=endpoint,
-            api_method=method,
-            status_code=status_code,
-            process_time=process_time,
-            kb_id=kb_id,
-            result_summary=result_summary,
+        common_kwargs = {
+            "api_endpoint": endpoint,
+            "api_method": method,
+            "status_code": status_code,
+            "kb_id": kb_id,
+            "result_summary": result_summary,
             **kwargs
-        )
+        }
+
+        if 200 <= status_code < 300:
+            cls.operation_success(
+                operation_type="rag_api",
+                operation_id=operation_id,
+                message=f"RAG API响应成功: {method} {endpoint} - {status_code}",
+                **common_kwargs
+            )
+        else:
+            error_message = f"Request failed with status code {status_code}"
+            cls.operation_error(
+                operation_type="rag_api",
+                operation_id=operation_id,
+                error=error_message,
+                message=f"RAG API响应失败: {method} {endpoint} - {status_code}",
+                **common_kwargs
+            )
 
     @classmethod
     def rag_api_error(
         cls,
+        operation_id: str,
         endpoint: str,
         method: str = "POST",
-        error: str = "",
+        error: Any = "",
         kb_id: int = None,
         user_id: int = None,
         **kwargs,
@@ -112,6 +121,7 @@ class RAGLogger(BaseLogger):
         """记录RAG API错误日志
 
         Args:
+            operation_id: 操作ID
             endpoint: API端点
             method: HTTP方法
             error: 错误信息
@@ -119,15 +129,13 @@ class RAGLogger(BaseLogger):
             user_id: 用户ID
             **kwargs: 额外的日志字段
         """
-        kb_info = f" - 知识库ID: {kb_id}" if kb_id else ""
-        user_info = f" - 用户ID: {user_id}" if user_id else ""
-        
-        cls.error(
-            f"RAG API错误: {method} {endpoint} - 错误: {error}{kb_info}{user_info}",
-            rag_operation_type="api_error",
+        cls.operation_error(
+            operation_type="rag_api",
+            operation_id=operation_id,
+            error=error,
+            message=f"RAG API错误: {method} {endpoint}",
             api_endpoint=endpoint,
             api_method=method,
-            error_message=error,
             kb_id=kb_id,
             user_id=user_id,
             **kwargs
@@ -466,7 +474,7 @@ class RAGLogger(BaseLogger):
         params: Dict = None,
         user_id: int = None,
         **kwargs,
-    ):
+    ) -> str:
         """记录RAG查询开始日志
 
         Args:
@@ -476,15 +484,15 @@ class RAGLogger(BaseLogger):
             params: 查询参数
             user_id: 用户ID
             **kwargs: 额外的日志字段
+
+        Returns:
+            str: 操作ID
         """
-        method_info = f" - 方法: {method}" if method else ""
-        user_info = f" - 用户ID: {user_id}" if user_id else ""
-        params_info = f" - 参数: {params}" if params else ""
         query_preview = query[:100] + "..." if len(query) > 100 else query
-        
-        cls.info(
-            f"RAG查询开始: 知识库ID {kb_id} - 查询: {query_preview}{method_info}{user_info}{params_info}",
-            rag_operation_type="query_start",
+
+        return cls.operation_start(
+            operation_type="rag_query",
+            message=f"RAG查询开始: 知识库ID {kb_id} - 查询: {query_preview}",
             kb_id=kb_id,
             query=query,
             retrieval_method=method,
@@ -496,37 +504,41 @@ class RAGLogger(BaseLogger):
     @classmethod
     def rag_query_complete(
         cls,
+        operation_id: str,
         kb_id: int,
-        query: str,
         success: bool,
-        duration: float,
         result_count: int = 0,
+        error: Optional[Any] = None,
         **kwargs,
     ):
         """记录RAG查询完成日志
 
         Args:
+            operation_id: 操作ID
             kb_id: 知识库ID
-            query: 查询内容
             success: 是否成功
-            duration: 查询耗时(秒)
             result_count: 结果数量
+            error: 错误信息 (如果失败)
             **kwargs: 额外的日志字段
         """
-        status = "成功" if success else "失败"
-        level = cls.info if success else cls.error
-        query_preview = query[:100] + "..." if len(query) > 100 else query
-        
-        level(
-            f"RAG查询{status}: 知识库ID {kb_id} - 查询: {query_preview} - 耗时: {duration:.3f}秒 - 结果数量: {result_count}",
-            rag_operation_type="query_complete",
-            kb_id=kb_id,
-            query=query,
-            query_success=success,
-            query_duration=duration,
-            result_count=result_count,
-            **kwargs
-        )
+        if success:
+            cls.operation_success(
+                operation_type="rag_query",
+                operation_id=operation_id,
+                message=f"RAG查询成功: 知识库ID {kb_id}",
+                kb_id=kb_id,
+                result_count=result_count,
+                **kwargs
+            )
+        else:
+            cls.operation_error(
+                operation_type="rag_query",
+                operation_id=operation_id,
+                error=error,
+                message=f"RAG查询失败: 知识库ID {kb_id}",
+                kb_id=kb_id,
+                **kwargs
+            )
 
     @classmethod
     def rag_retrieval_result(

@@ -8,10 +8,23 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from datetime import datetime
 from sqlalchemy import select, and_
-from app.models.document import Document, DocumentType
+from typing import Optional, Dict, Any
+import os
+import hashlib
+import shutil
+import asyncio
+from pathlib import Path as FilePath
+from fastapi import UploadFile, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy import select, and_
+from datetime import datetime
+
+from app.core.config import settings
+from app.core.logger import Logger
+from app.models.document import Document, DocumentType, ProcessingStatus
+from app.models.knowledge_base import KnowledgeBase, PermissionType
 from app.rag.extractor.extract_processor import ExtractProcessor
 from app.schemas.document import DocumentCreate, DocumentUpdate
-from app.models.knowledge_base import KnowledgeBase
 from fastapi import HTTPException, status
 from app.core.logger import Logger
 
@@ -86,6 +99,62 @@ class DocumentService:
         
         Logger.info(f"Document '{document.title}' (ID: {db_document.id}) created successfully")
         return db_document
+
+    async def reprocess_document(self, document_id: int, user_id: int) -> Document:
+        """重新处理指定文档"""
+        Logger.info(f"Reprocessing document {document_id} requested by user {user_id}")
+
+        doc = await self.get(document_id)
+
+        # 动态导入以避免循环依赖
+        from app.services.knowledge_base import KnowledgeBaseService
+
+        kb_service = KnowledgeBaseService(self.db)
+        permission_granted = await kb_service.check_permission(
+            doc.knowledge_base_id, user_id, PermissionType.EDITOR
+        )
+        if not permission_granted:
+            Logger.warning(
+                f"Reprocess rejected: User {user_id} lacks EDITOR permission for KB {doc.knowledge_base_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="没有足够的权限执行此操作"
+            )
+
+        if not doc.storage_path or not os.path.exists(doc.storage_path):
+            Logger.error(
+                f"Reprocess failed: Document {document_id} has no file or file is missing."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该文档不支持重新处理（非文件上传或文件已丢失）",
+            )
+
+        # 重置状态并触发处理
+        doc.processing_status = ProcessingStatus.PROCESSING
+        doc.content = None
+        doc.error_message = None
+        doc.word_count = 0
+        self.db.add(doc)
+        await self.db.commit()
+        await self.db.refresh(doc)
+
+        try:
+            extractor = ExtractProcessor(self.db)
+            asyncio.create_task(extractor.extract_and_save(doc.id))
+            Logger.info(f"Queued reprocessing task for document {doc.id}")
+        except Exception as e:
+            doc.processing_status = ProcessingStatus.FAILED
+            doc.error_message = f"Failed to trigger reprocessing: {str(e)}"
+            self.db.add(doc)
+            await self.db.commit()
+            Logger.error(f"Failed to queue reprocessing for document {doc.id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="触发文档重新处理失败",
+            )
+
+        return doc
 
     async def get(self, document_id: int) -> Document:
         """获取文档详情"""
@@ -235,15 +304,71 @@ class DocumentService:
             )
 
     async def create_from_upload(
-        self,
-        kb_id: int,
-        user_id: int,
-        file: UploadFile
+        self, kb_id: int, user_id: int, file: UploadFile
     ) -> Document:
+        """从上传的文件创建新文档"""
+        storage_path = FilePath(settings.FILE_STORAGE_PATH)
+        os.makedirs(storage_path, exist_ok=True)
+
+        contents = await file.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+
+        existing_doc = (
+            await self.db.execute(
+                select(Document).filter(
+                    and_(
+                        Document.knowledge_base_id == kb_id,
+                        Document.file_hash == file_hash,
+                        Document.is_deleted == False,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing_doc:
+            raise HTTPException(status_code=409, detail="相同的文件已存在")
+
+        file_location = storage_path / f"{file_hash}_{file.filename}"
+        with open(file_location, "wb") as f:
+            f.write(contents)
+
+        file_extension = FilePath(file.filename).suffix
+        doc_type = DocumentType.from_extension(file_extension)
+
+        db_document = Document(
+            title=file.filename,
+            doc_type=doc_type,
+            knowledge_base_id=kb_id,
+            created_by_id=user_id,
+            file_name=file.filename,
+            file_size=len(contents),
+            file_hash=file_hash,
+            mime_type=file.content_type,
+            storage_path=str(file_location),
+            processing_status=ProcessingStatus.PROCESSING,
+        )
+        self.db.add(db_document)
+        await self.db.commit()
+        await self.db.refresh(db_document)
+
+        try:
+            extractor = ExtractProcessor(self.db)
+            asyncio.create_task(extractor.extract_and_save(db_document.id))
+            Logger.info(f"Queued extraction task for document {db_document.id}")
+        except Exception as e:
+            db_document.processing_status = ProcessingStatus.FAILED
+            db_document.error_message = f"Failed to trigger extraction: {str(e)}"
+            self.db.add(db_document)
+            await self.db.commit()
+            Logger.error(
+                f"Failed to queue extraction for document {db_document.id}: {str(e)}"
+            )
+
+        return db_document
         """从上传的文件创建新文档"""
         # 确保存储目录存在
         storage_path = FilePath(settings.FILE_STORAGE_PATH)
-        storage_path.mkdir(parents=True, exist_ok=True)
+        os.makedirs(storage_path, exist_ok=True)
 
         # 读取文件内容并计算哈希
         contents = await file.read()
@@ -276,7 +401,6 @@ class DocumentService:
         doc_type = DocumentType.from_extension(file_extension)
 
         # 创建文档记录
-        # 创建文档记录
         db_document = Document(
             title=file.filename,
             doc_type=doc_type,
@@ -287,16 +411,15 @@ class DocumentService:
             file_hash=file_hash,
             mime_type=file.content_type,
             storage_path=str(file_location),
-            processing_status='processing'  # 设置为处理中
+            processing_status=ProcessingStatus.PROCESSING,
         )
-
         self.db.add(db_document)
+        # 提交一次即可，后续由异步任务更新状态
         await self.db.commit()
         await self.db.refresh(db_document)
 
         # 提取文件内容
         try:
-            Logger.info(f"开始提取文件 '{file.filename}' (ID: {db_document.id}) 的内容。")
             extractor = ExtractProcessor()
             extracted_content = await extractor.extract(str(file_location))
             

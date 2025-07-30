@@ -50,7 +50,9 @@ class KnowledgeBaseService:
         """检查用户对知识库的权限"""
         kb = (
             await self.db.execute(
-                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+                select(KnowledgeBase).filter(
+                    and_(KnowledgeBase.id == kb_id, KnowledgeBase.is_deleted == False)
+                )
             )
         ).scalar_one_or_none()
 
@@ -65,7 +67,9 @@ class KnowledgeBaseService:
         """获取用户对知识库的权限级别"""
         kb = (
             await self.db.execute(
-                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+                select(KnowledgeBase).filter(
+                    and_(KnowledgeBase.id == kb_id, KnowledgeBase.is_deleted == False)
+                )
             )
         ).scalar_one_or_none()
 
@@ -751,6 +755,34 @@ class KnowledgeBaseService:
             skip_permission_check=skip_permission_check,
         )
 
+    async def delete(self, kb_id: int, user_id: int) -> None:
+        """软删除知识库"""
+        Logger.info(f"Attempting to delete knowledge base {kb_id} by user {user_id}")
+
+        # 检查权限，只有所有者可以删除
+        permission_granted = await self.check_permission(
+            kb_id, user_id, PermissionType.OWNER
+        )
+        if not permission_granted:
+            Logger.warning(f"Delete rejected: User {user_id} is not the owner of KB {kb_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有知识库所有者才能删除"
+            )
+
+        kb = await self.get(kb_id, user_id)
+        if not kb:
+            # get方法已经处理了不存在的情况，这里为了逻辑完备
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="知识库不存在"
+            )
+
+        kb.is_deleted = True
+        kb.deleted_at = datetime.now()
+        self.db.add(kb)
+        await self.db.commit()
+        Logger.info(f"Knowledge base {kb_id} has been soft-deleted.")
+
     async def get(self, kb_id: int, user_id: int) -> KnowledgeBase:
         """获取知识库详情"""
         if not await self.check_permission(kb_id, user_id, PermissionType.VIEWER):
@@ -760,7 +792,9 @@ class KnowledgeBaseService:
 
         kb = (
             await self.db.execute(
-                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+                select(KnowledgeBase).filter(
+                    and_(KnowledgeBase.id == kb_id, KnowledgeBase.is_deleted == False)
+                )
             )
         ).scalar_one_or_none()
 
@@ -785,7 +819,9 @@ class KnowledgeBaseService:
 
         db_kb = (
             await self.db.execute(
-                select(KnowledgeBase).filter(KnowledgeBase.id == kb_id)
+                select(KnowledgeBase).filter(
+                    and_(KnowledgeBase.id == kb_id, KnowledgeBase.is_deleted == False)
+                )
             )
         ).scalar_one_or_none()
 
@@ -933,7 +969,12 @@ class KnowledgeBaseService:
                             KnowledgeBase.id
                             == knowledge_base_users.c.knowledge_base_id,
                         )
-                        .filter(knowledge_base_users.c.user_id == user_id)
+                        .filter(
+                            and_(
+                                knowledge_base_users.c.user_id == user_id,
+                                KnowledgeBase.is_deleted == False,
+                            )
+                        )
                     )
                 )
                 .scalars()

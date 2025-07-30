@@ -131,6 +131,22 @@ async def delete_document(
     await document_service.delete(doc_id)
     return APIResponse.success(data={"message": "文档已删除"})
 
+@router.post("/documents/{doc_id}/reprocess", summary="重新处理文档")
+async def reprocess_document(
+    doc_id: int = Path(..., description="文档ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    重新触发对指定文档的内容提取和处理。
+
+    这在更新了文档解析逻辑后非常有用。
+    """
+    document_service = DocumentService(db)
+    doc = await document_service.reprocess_document(doc_id, current_user.id)
+    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+
+
 @router.get("/documents/{doc_id}")
 async def get_document(
     doc_id: int = Path(..., description="文档ID"),

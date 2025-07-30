@@ -193,6 +193,23 @@ async def update_knowledge_base(
         
         raise
 
+
+@router.delete(
+    "/{kb_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除知识库",
+    description="软删除指定的知识库，只有所有者才能执行此操作。",
+)
+async def delete_knowledge_base(
+    kb_id: int,
+    current_user: CurrentUser,
+    knowledge_base_service: KnowledgeBaseService = Depends(get_knowledge_base_service),
+):
+    """软删除知识库接口"""
+    await knowledge_base_service.delete(kb_id, current_user.id)
+    return
+
+
 @router.post("/{kb_id}/train")
 @require_knowledge_base_permission(PermissionType.EDITOR)
 async def train_knowledge_base(
