@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.response import APIResponse
 from app.models.user import User
@@ -12,8 +12,8 @@ from datetime import datetime
 
 router = APIRouter(tags=["admin"])
 
-@router.post("/knowledge-bases/{kb_id}/documents")
-async def create_document(
+@router.post("/knowledge-bases/{kb_id}/documents/text", summary="创建文本类型文档")
+async def create_text_document(
     *,
     doc_in: DocumentCreate,
     kb_id: int = Path(..., description="知识库ID"),
@@ -33,6 +33,18 @@ async def create_document(
     """
     document_service = DocumentService(db)
     doc = await document_service.create(doc_in, kb_id, current_user.id)
+    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+
+@router.post("/knowledge-bases/{kb_id}/documents/upload", summary="上传文件创建文档")
+async def upload_document(
+    kb_id: int = Path(..., description="知识库ID"),
+    file: UploadFile = File(..., description="上传的文档文件"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """上传文件创建新文档"""
+    document_service = DocumentService(db)
+    doc = await document_service.create_from_upload(kb_id, current_user.id, file)
     return APIResponse.success(data=DocumentResponse.model_validate(doc))
 
 @router.get("/knowledge-bases/{kb_id}/documents")

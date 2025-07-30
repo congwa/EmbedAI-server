@@ -14,6 +14,8 @@ from app.rag.extractor.word_extractor import WordExtractor
 from app.rag.extractor.excel_extractor import ExcelExtractor
 from app.rag.extractor.markdown_extractor import MarkdownExtractor
 from app.rag.extractor.html_extractor import HtmlExtractor
+from app.rag.extractor.csv_extractor import CsvExtractor
+from app.rag.extractor.pptx_extractor import PptxExtractor
 
 class ExtractProcessor:
     """文档处理器，负责处理多种格式的文档"""
@@ -31,6 +33,8 @@ class ExtractProcessor:
             ".markdown": MarkdownExtractor(),
             ".html": HtmlExtractor(),
             ".htm": HtmlExtractor(),
+            ".csv": CsvExtractor(),
+            ".pptx": PptxExtractor(),
         }
         
     async def process_document(self, document: DBDocument) -> List[Document]:

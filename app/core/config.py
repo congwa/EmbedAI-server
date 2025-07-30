@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     
     # 数据库配置
     DATABASE_URL: str = "sqlite:///./embed_ai.db"
+
+    # 文件存储路径
+    FILE_STORAGE_PATH: str = "storage/documents"
     
     # JWT配置
     SECRET_KEY: str = "123456"

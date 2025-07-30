@@ -1,8 +1,15 @@
 from typing import Optional, Dict, Any
+import os
+import hashlib
+import shutil
+from pathlib import Path as FilePath
+from fastapi import UploadFile
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from datetime import datetime
 from sqlalchemy import select, and_
 from app.models.document import Document, DocumentType
+from app.rag.extractor.extract_processor import ExtractProcessor
 from app.schemas.document import DocumentCreate, DocumentUpdate
 from app.models.knowledge_base import KnowledgeBase
 from fastapi import HTTPException, status
@@ -44,7 +51,8 @@ class DocumentService:
         Logger.info(f"Creating new document '{document.title}' for knowledge base {kb_id}")
         
         # 检查文档类型
-        if document.doc_type != DocumentType.TEXT:
+        # 允许创建所有在 DocumentType 枚举中定义的类型
+        if document.doc_type not in DocumentType:
             Logger.error(f"Document creation failed: Unsupported document type {document.doc_type}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -175,8 +183,8 @@ class DocumentService:
                 detail="文档不存在"
             )
 
-        # 检查文档类型
-        if document.doc_type and document.doc_type != DocumentType.TEXT:
+        # 检查文档类型，允许更新为任何有效的文档类型
+        if document.doc_type and document.doc_type not in DocumentType:
             Logger.error(f"Document update failed: Unsupported document type {document.doc_type}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -225,3 +233,97 @@ class DocumentService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"文档删除失败: {str(e)}"
             )
+
+    async def create_from_upload(
+        self,
+        kb_id: int,
+        user_id: int,
+        file: UploadFile
+    ) -> Document:
+        """从上传的文件创建新文档"""
+        # 确保存储目录存在
+        storage_path = FilePath(settings.FILE_STORAGE_PATH)
+        storage_path.mkdir(parents=True, exist_ok=True)
+
+        # 读取文件内容并计算哈希
+        contents = await file.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+
+        # 检查知识库中是否已存在相同的文件
+        existing_doc = (await self.db.execute(
+            select(Document).filter(
+                and_(
+                    Document.knowledge_base_id == kb_id,
+                    Document.file_hash == file_hash,
+                    Document.is_deleted == False
+                )
+            )
+        )).scalar_one_or_none()
+
+        if existing_doc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"相同的文件 '{file.filename}' 已存在于此知识库中。"
+            )
+
+        # 保存文件到存储路径
+        file_location = storage_path / f"{file_hash}_{file.filename}"
+        with open(file_location, "wb") as f:
+            f.write(contents)
+
+        # 从文件扩展名推断文档类型
+        file_extension = FilePath(file.filename).suffix
+        doc_type = DocumentType.from_extension(file_extension)
+
+        # 创建文档记录
+        # 创建文档记录
+        db_document = Document(
+            title=file.filename,
+            doc_type=doc_type,
+            knowledge_base_id=kb_id,
+            created_by_id=user_id,
+            file_name=file.filename,
+            file_size=len(contents),
+            file_hash=file_hash,
+            mime_type=file.content_type,
+            storage_path=str(file_location),
+            processing_status='processing'  # 设置为处理中
+        )
+
+        self.db.add(db_document)
+        await self.db.commit()
+        await self.db.refresh(db_document)
+
+        # 提取文件内容
+        try:
+            Logger.info(f"开始提取文件 '{file.filename}' (ID: {db_document.id}) 的内容。")
+            extractor = ExtractProcessor()
+            extracted_content = await extractor.extract(str(file_location))
+            
+            # 更新文档内容和状态
+            db_document.content = extracted_content
+            db_document.processing_status = 'completed'
+            Logger.info(f"文件 '{file.filename}' (ID: {db_document.id}) 内容提取成功。")
+
+        except Exception as e:
+            db_document.processing_status = 'failed'
+            db_document.processing_error = str(e)
+            Logger.error(f"文件 '{file.filename}' (ID: {db_document.id}) 内容提取失败: {str(e)}")
+        
+        # 提交最终状态
+        self.db.add(db_document)
+        await self.db.commit()
+        await self.db.refresh(db_document)
+
+        self.db.add(db_document)
+        await self.db.commit()
+        await self.db.refresh(db_document)
+
+        if db_document.processing_status == 'failed':
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"文件 '{file.filename}' 内容提取失败: {db_document.processing_error}"
+            )
+
+        Logger.info(f"文件 '{file.filename}' 已成功上传并处理 (ID: {db_document.id})。")
+        return db_document

@@ -35,6 +35,7 @@ from .database_logger import DatabaseLogger
 from .service_logger import ServiceLogger
 from .rag_logger import RAGLogger
 from .performance_logger import PerformanceLogger
+from .operation_logger import OperationLogger
 
 
 class Logger(
@@ -69,4 +70,5 @@ __all__ = [
     'ServiceLogger',
     'RAGLogger',
     'PerformanceLogger',
+    'OperationLogger',
 ]
