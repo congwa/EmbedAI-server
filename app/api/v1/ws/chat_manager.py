@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import WebSocket, status
 from sqlalchemy.orm import Session
 import time
@@ -49,7 +49,36 @@ class ChatWebSocketManager:
             user_id=user_context.user_id,
             user_type=user_context.user_type
         )
-        
+
+    async def send_message(self, message: Dict[str, Any]):
+        """发送格式化消息到当前WebSocket"""
+        await self.websocket.send_json(message)
+
+    def _format_message_for_response(self, message: Any, message_type: str = "message") -> Dict[str, Any]:
+        """格式化消息以便发送"""
+        return {
+            "type": message_type,
+            "data": {
+                "id": message.id,
+                "content": message.content,
+                "message_type": message.message_type,
+                "created_at": message.created_at.isoformat(),
+                "sender_id": message.sender_id,
+                "doc_metadata": message.doc_metadata,
+                "trace_id": self.trace_id
+            }
+        }
+
+    async def send_notification(self, content: str, message_type: str = "system"):
+        """向聊天室广播通知"""
+        notification = await self.chat_service.add_message(
+            chat_id=self.chat_id,
+            content=content,
+            message_type=MessageType.SYSTEM,
+            doc_metadata={"trace_id": self.trace_id}
+        )
+        await self._broadcast_message(notification, message_type=message_type)
+
     async def handle_user_message(
         self,
         message_data: Dict[str, Any]
@@ -57,6 +86,11 @@ class ChatWebSocketManager:
         """处理用户消息"""
         start_time = time.time()
         
+        # 处理历史记录请求
+        if message_data.get("type") == "get_history":
+            await self._handle_history_request(message_data)
+            return
+
         Logger.websocket_event(
             event_type="收到用户消息",
             chat_id=self.chat_id,
@@ -117,6 +151,11 @@ class ChatWebSocketManager:
         """处理管理员消息"""
         start_time = time.time()
         
+        # 处理历史记录请求
+        if message_data.get("type") == "get_history":
+            await self._handle_history_request(message_data)
+            return
+
         Logger.websocket_event(
             event_type="收到管理员消息",
             chat_id=self.chat_id,
@@ -180,6 +219,23 @@ class ChatWebSocketManager:
             admin_id=self.user_context.user_id,
             process_time=process_time
         )
+
+    async def _handle_history_request(self, message_data: Dict[str, Any]):
+        """处理历史记录请求"""
+        before_message_id = message_data.get("before_message_id")
+        limit = message_data.get("limit", 20)
+
+        history = await self.chat_service.get_message_history(
+            chat_id=self.chat_id,
+            before_message_id=before_message_id,
+            limit=limit
+        )
+
+        response = {
+            "type": "history",
+            "data": [self._format_message_for_response(msg)["data"] for msg in history]
+        }
+        await self.send_message(response)
         
     async def _handle_ai_response(
         self,
@@ -274,17 +330,6 @@ class ChatWebSocketManager:
         
         await connection_manager.broadcast_to_chat(
             chat_id=self.chat_id,
-            message={
-                "type": message_type,
-                "data": {
-                    "id": message.id,
-                    "content": message.content,
-                    "message_type": message.message_type,
-                    "created_at": message.created_at,
-                    "sender_id": message.sender_id,
-                    "doc_metadata": message.doc_metadata,
-                    "trace_id": self.trace_id
-                }
-            },
+            message=self._format_message_for_response(message, message_type),
             exclude_client=self.user_context.client_id
-        ) 
+        )

@@ -447,6 +447,41 @@ class ChatService:
         Logger.debug(f"Retrieved {len(messages)} context messages for chat {chat_id}")
         return messages
 
+    async def get_message_history(
+        self,
+        chat_id: int,
+        before_message_id: Optional[int] = None,
+        limit: int = 20
+    ) -> List[ChatMessage]:
+        """获取聊天历史记录
+        
+        Args:
+            chat_id: 会话ID
+            before_message_id: 在此消息ID之前的消息 (用于分页)
+            limit: 返回的消息数量
+            
+        Returns:
+            List[ChatMessage]: 消息列表 (按时间正序)
+        """
+        query = (
+            select(ChatMessage)
+            .filter(ChatMessage.chat_id == chat_id)
+        )
+        
+        if before_message_id:
+            query = query.filter(ChatMessage.id < before_message_id)
+            
+        # Fetch the most recent messages in the selected range
+        query = query.order_by(ChatMessage.created_at.desc()).limit(limit)
+        
+        messages = (await self.db.execute(query)).scalars().all()
+        
+        # Reverse the list to return messages in chronological order
+        messages.reverse()
+        
+        Logger.debug(f"Retrieved {len(messages)} history messages for chat {chat_id} before message {before_message_id}")
+        return messages
+
     async def restore_chat(
         self,
         chat_id: int,
@@ -660,4 +695,4 @@ class ChatService:
         for message in messages:
             await self._cache_message(message)
             
-        return messages, total 
+        return messages, total

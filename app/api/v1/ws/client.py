@@ -96,6 +96,11 @@ async def client_chat_websocket(
             db=db
         )
         
+        # 发送初始历史记录
+        await ws_manager._handle_history_request({"limit": 20})
+
+        # 广播用户加入通知
+        await ws_manager.send_notification(f"用户 {third_party_user_id} 已加入聊天")
         connection_time = time.time() - start_time
         Logger.info(
             f"客户端WebSocket连接成功，耗时: {connection_time:.2f}秒",
