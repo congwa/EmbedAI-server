@@ -130,6 +130,8 @@ async def client_chat_websocket(
                 
         except WebSocketDisconnect:
             # 清理连接
+            # 广播用户离开通知
+            await ws_manager.send_notification(f"用户 {third_party_user_id} 已离开聊天")
             connection_manager.disconnect(chat_id, client_id)
             await session_manager.close_session(chat_id, client_id)
             Logger.websocket_event(

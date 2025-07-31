@@ -25,6 +25,7 @@ async def list_chats(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     include_inactive: bool = Query(False),
+    all_chats: bool = Query(False, description="是否获取所有聊天室列表"),
     current_admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -39,7 +40,8 @@ async def list_chats(
         admin_id=current_admin.id,
         skip=skip,
         limit=limit,
-        include_inactive=include_inactive
+        include_inactive=include_inactive,
+        all_chats=all_chats
     )
     return APIResponse.success(data=chats)
 
@@ -81,6 +83,28 @@ async def switch_chat_mode(
     )
     return APIResponse.success(data=chat)
 
+
+@router.post("/{chat_id}/join", response_model=ResponseModel[ChatResponse])
+async def join_chat(
+    chat_id: int,
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """管理员加入聊天"""
+    chat_service = ChatService(db)
+    chat = await chat_service.admin_join_chat(chat_id, current_admin.id)
+    return APIResponse.success(data=chat)
+
+@router.post("/{chat_id}/leave", response_model=ResponseModel[ChatResponse])
+async def leave_chat(
+    chat_id: int,
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """管理员离开聊天"""
+    chat_service = ChatService(db)
+    chat = await chat_service.admin_leave_chat(chat_id, current_admin.id)
+    return APIResponse.success(data=chat)
 @router.post("/{chat_id}/messages", response_model=ResponseModel[ChatMessageResponse])
 async def send_admin_message(
     chat_id: int,

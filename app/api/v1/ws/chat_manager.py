@@ -90,6 +90,9 @@ class ChatWebSocketManager:
         if message_data.get("type") == "get_history":
             await self._handle_history_request(message_data)
             return
+        elif message_data.get("type") == "get_members":
+            await self._handle_get_members_request()
+            return
 
         Logger.websocket_event(
             event_type="收到用户消息",
@@ -154,6 +157,9 @@ class ChatWebSocketManager:
         # 处理历史记录请求
         if message_data.get("type") == "get_history":
             await self._handle_history_request(message_data)
+            return
+        elif message_data.get("type") == "get_members":
+            await self._handle_get_members_request()
             return
 
         Logger.websocket_event(
@@ -234,6 +240,20 @@ class ChatWebSocketManager:
         response = {
             "type": "history",
             "data": [self._format_message_for_response(msg)["data"] for msg in history]
+        }
+        await self.send_message(response)
+
+    async def _handle_get_members_request(self):
+        """处理获取成员列表的请求"""
+        members = connection_manager.get_clients_in_chat(self.chat_id)
+        member_ids = list(members.keys())
+        
+        response = {
+            "type": "members",
+            "data": {
+                "members": member_ids,
+                "count": len(member_ids)
+            }
         }
         await self.send_message(response)
         

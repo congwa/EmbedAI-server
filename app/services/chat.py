@@ -528,18 +528,22 @@ class ChatService:
         admin_id: int,
         skip: int = 0,
         limit: int = 20,
-        include_inactive: bool = False
+        include_inactive: bool = False,
+        all_chats: bool = False
     ) -> List[Chat]:
         """获取管理员可见的聊天会话列表"""
-        query = select(Chat).filter(
-            or_(
-                Chat.current_admin_id == admin_id,
-                and_(
-                    Chat.chat_mode == ChatMode.AI,
-                    Chat.is_deleted == False
+        if all_chats:
+            query = select(Chat)
+        else:
+            query = select(Chat).filter(
+                or_(
+                    Chat.current_admin_id == admin_id,
+                    and_(
+                        Chat.chat_mode == ChatMode.AI,
+                        Chat.is_deleted == False
+                    )
                 )
             )
-        )
         
         if not include_inactive:
             query = query.filter(Chat.is_active == True)
@@ -588,6 +592,41 @@ class ChatService:
             )
         
         await self.db.commit()
+        await self._cache_chat(chat)
+        return chat
+
+    async def admin_join_chat(self, chat_id: int, admin_id: int) -> Chat:
+        """管理员加入聊天"""
+        chat = await self.get_chat(chat_id)
+        if chat.current_admin_id is not None:
+            raise HTTPException(status_code=400, detail="已有管理员在该聊天中")
+        
+        chat.current_admin_id = admin_id
+        chat.chat_mode = ChatMode.HUMAN
+        await self.db.commit()
+        await self._cache_chat(chat)
+        
+        await self.add_system_message(
+            chat_id=chat_id,
+            content=f"管理员 {admin_id} 已加入聊天"
+        )
+        return chat
+
+    async def admin_leave_chat(self, chat_id: int, admin_id: int) -> Chat:
+        """管理员离开聊天"""
+        chat = await self.get_chat(chat_id)
+        if chat.current_admin_id != admin_id:
+            raise HTTPException(status_code=403, detail="您不是当前聊天的管理员")
+            
+        chat.current_admin_id = None
+        chat.chat_mode = ChatMode.AI
+        await self.db.commit()
+        await self._cache_chat(chat)
+        
+        await self.add_system_message(
+            chat_id=chat_id,
+            content=f"管理员 {admin_id} 已离开聊天，切换到AI助手模式"
+        )
         return chat
 
     async def add_system_message(
