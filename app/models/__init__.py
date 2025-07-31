@@ -6,5 +6,6 @@ from .document_chunk import DocumentChunk
 from .document_embedding import DocumentEmbedding
 from .chat import Chat
 from .message import Message
+from .llm_usage_log import LLMUsageLog
 from .enums import PermissionType, TrainingStatus
 from .associations import knowledge_base_users

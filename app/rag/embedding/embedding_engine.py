@@ -3,25 +3,28 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 import time
 
+from sqlalchemy.orm import Session
 from app.core.logger import Logger
 from app.schemas.llm import LLMConfig
 from app.rag.embedding.cached_embedding import CacheEmbedding
 from app.rag.models.document import Document
-
+ 
 class EmbeddingEngine:
     """向量化引擎
     
     负责将文本转换为向量表示
     """
     
-    def __init__(self, llm_config: LLMConfig):
+    def __init__(self, llm_config: LLMConfig, db: Session):
         """初始化向量化引擎
         
         Args:
             llm_config: LLM配置
+            db: 数据库会话
         """
         self.llm_config = llm_config
-        self.embedding_service = CacheEmbedding(llm_config)
+        self.db = db
+        self.embedding_service = CacheEmbedding(llm_config, db)
         
         # 记录向量化引擎初始化
         Logger.debug(f"初始化向量化引擎:")

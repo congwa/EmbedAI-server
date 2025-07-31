@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     RAG_DEFAULT_RETRIEVAL_METHOD: str = "hybrid_search"  # 默认检索方法
     RAG_USE_RERANK: bool = True  # 是否默认使用重排序
 
+    # 模型定价（美元/千Token）
+    MODEL_PRICING: Dict[str, Dict[str, float]] = {
+        "Qwen/Qwen2.5-7B-Instruct": {"prompt": 0.001, "completion": 0.002},
+        "BAAI/bge-m3": {"prompt": 0.0001, "completion": 0},  # Embedding models only have prompt cost
+        "gpt-4": {"prompt": 0.03, "completion": 0.06},
+        "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
+    }
+ 
     @property
     def DEFAULT_LLM_CONFIG(self) -> LLMConfig:
         """默认的 LLM 配置，使用环境变量和默认值构建"""

@@ -11,19 +11,24 @@ from app.core.redis_manager import redis_manager
 from app.schemas.llm import LLMConfig
 from app.rag.embedding.embedding_base import Embeddings
 
+from sqlalchemy.orm import Session
+from app.services.usage_service import UsageService
+
 class CacheEmbedding(Embeddings):
     """缓存向量化实现
     
     使用Redis缓存向量化结果，避免重复计算
     """
     
-    def __init__(self, llm_config: LLMConfig):
+    def __init__(self, llm_config: LLMConfig, db: Session):
         """初始化缓存向量化
         
         Args:
             llm_config: LLM配置
+            db: 数据库会话
         """
         self.llm_config = llm_config
+        self.db = db
         self.model = llm_config.embeddings.model
         self.provider = "embedding_service"  # 默认提供商名称
         self.api_base = llm_config.embeddings.base_url
@@ -346,7 +351,33 @@ class CacheEmbedding(Embeddings):
             # 解析响应
             parse_start = time.time()
             result = response.json()
-            
+            # 记录用量
+            if "usage" in result and self.db:
+                try:
+                    usage = result["usage"]
+                    usage_service = UsageService(self.db)
+                    await usage_service.record_usage(
+                        model_name=self.model,
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0)
+                    )
+                except Exception as e:
+                    Logger.error(f"在_call_embedding_api中记录用量失败: {str(e)}")
+
+
+            # 记录用量
+            if "usage" in result and self.db:
+                try:
+                    usage = result["usage"]
+                    usage_service = UsageService(self.db)
+                    await usage_service.record_usage(
+                        model_name=self.model,
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0)
+                    )
+                except Exception as e:
+                    Logger.error(f"在_call_embedding_api中记录用量失败: {str(e)}")
+
             # 提取向量
             embeddings = []
             vector_norms = []

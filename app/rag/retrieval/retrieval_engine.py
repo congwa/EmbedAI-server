@@ -30,7 +30,7 @@ class RetrievalEngine:
         """
         self.db = db
         self.llm_config = llm_config
-        self.embedding_engine = EmbeddingEngine(llm_config)
+        self.embedding_engine = EmbeddingEngine(llm_config, self.db)
         # 默认不使用重排序
         self.use_rerank = False
         self.rerank_mode = None
