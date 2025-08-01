@@ -6,16 +6,16 @@
 
 - **端点**: `ws://<server_address>/api/v1/ws/client/{chat_id}`
 - **路径参数**:
-  - `chat_id` (整数): 必须的，指定要加入的聊天会话ID。
+  - `chat_id` (整数): **必须**。指定要加入的聊天会话ID。
 - **查询参数**:
-  - `client_id` (字符串): 必须的，客户端实例的唯一标识符。
-  - `third_party_user_id` (整数): 必须的，第三方系统的用户ID。
+  - `client_id` (字符串): **必须**。客户端实例的唯一标识符。
+  - `third_party_user_id` (整数): **必须**。第三方系统的用户ID。
 - **请求头**:
-  - `X-Trace-ID` (字符串, 可选): 用于端到端请求追踪的ID。如果未提供，系统将自动生成。
+  - `X-Trace-ID` (字符串, 可选): 用于端到端请求追踪的ID。
 
 ## 2. 通用消息格式
 
-所有通过 WebSocket 交换的消息都是 JSON 对象，并遵循以下结构：
+所有客户端与服务器之间的消息都遵循此JSON结构。
 
 ```json
 {
@@ -25,39 +25,42 @@
 }
 ```
 
-- `type` (字符串): **必须**。标识消息的用途，使用 `域.动作` 的约定。
-- `payload` (对象): **必须**。包含与消息类型相关的数据。
-- `request_id` (字符串, 可选): 由客户端为需要响应的请求生成的唯一ID。服务器将在其响应消息中原样返回此ID，用于请求-响应的精确匹配。
+- `type` (字符串): **必须**。消息的类型，格式为 `domain.action`。
+- `payload` (对象): **必须**。与消息类型相关的具体数据。
+- `request_id` (字符串, 可选): 唯一的请求标识符。对于需要响应的请求，响应消息将包含相同的 `request_id`。
 
 ---
 
 ## 3. 客户端到服务器事件 (C2S)
 
-### 3.1. 创建消息
+客户端可以向服务器发送以下事件。
 
-发送一条新的聊天消息。服务器会将此消息广播给聊天室中的所有成员。
+### 3.1 `message.create`
 
-- **type**: `message.create`
-- **payload**:
+发送一条聊天消息。
+
+- **Payload**:
   - `content` (字符串): **必须**。消息的文本内容。
+  - `message_type` (字符串, 可选): 消息类型，默认为 `TEXT`。
+  - `metadata` (对象, 可选): 附加的元数据。
 - **示例**:
   ```json
   {
     "type": "message.create",
     "payload": {
       "content": "你好，我的订单需要帮助。"
-    }
+    },
+    "request_id": "req-msg-123"
   }
   ```
 
-### 3.2. 请求历史记录
+### 3.2 `history.request`
 
-请求指定数量的历史消息，通常用于初次加载或滚动加载。
+请求聊天历史消息。
 
-- **type**: `history.request`
-- **payload**:
-  - `before_message_id` (整数, 可选): 如果提供，则获取此消息ID之前的消息（用于分页）。
-  - `limit` (整数, 可选, 默认: 20): 返回的最大消息数量。
+- **Payload**:
+  - `before_message_id` (整数, 可选): 如果提供，则返回此消息ID之前的消息。用于分页加载。
+  - `limit` (整数, 可选, 默认值: 20): 要获取的消息数量。
 - **示例**:
   ```json
   {
@@ -65,38 +68,38 @@
     "payload": {
       "limit": 50
     },
-    "request_id": "req-hist-123"
+    "request_id": "req-hist-456"
   }
   ```
 
-### 3.3. 更新输入状态
+### 3.3 `typing.start` / `typing.stop`
 
-通知服务器和其他用户本客户端的输入状态。
+通知服务器客户端正在输入或已停止输入。
 
-- **type**: `typing.start` 或 `typing.stop`
-- **payload**:
-  - `is_typing` (布尔值): **必须**。`true` 表示用户开始输入，`false` 表示停止。
-- **示例**:
+- **Payload**:
+  - `is_typing` (布尔值): **必须**。`true` 表示正在输入，`false` 表示停止输入。
+- **示例 (`typing.start`)**:
   ```json
   {
     "type": "typing.start",
-    "payload": { "is_typing": true }
+    "payload": {
+      "is_typing": true
+    }
   }
   ```
 
-### 3.4. 标记消息已读
+### 3.4 `message.read`
 
-通知服务器某些消息已被当前用户阅读。
+将一条或多条消息标记为已读。
 
-- **type**: `message.read`
-- **payload**:
-  - `message_ids` (整数数组): **必须**。已被阅读的消息ID列表。
+- **Payload**:
+  - `message_ids` (整数数组): **必须**。需要标记为已读的消息ID列表。
 - **示例**:
   ```json
   {
     "type": "message.read",
     "payload": {
-      "message_ids": [101, 102, 103]
+      "message_ids": [101, 102]
     }
   }
   ```
@@ -105,57 +108,140 @@
 
 ## 4. 服务器到客户端事件 (S2C)
 
-### 4.1. 新消息
+服务器会向客户端推送以下事件。
 
-当有新消息（来自用户、AI或管理员）被创建时，服务器会广播此事件。
+### 4.1 `message.new`
 
-- **type**: `message.new`
-- **payload**:
-  - `message` (对象): 完整的聊天消息对象。
+当有新消息（来自用户、管理员或AI）时，服务器会广播此事件。
+
+- **Payload**:
+  - `message` (对象): **必须**。完整的消息对象。
     - `id` (整数): 消息的唯一ID。
+    - `chat_id` (整数): 所属聊天ID。
     - `content` (字符串): 消息内容。
-    - `message_type` (字符串): 消息类型，枚举值包括: `"user"`, `"assistant"`, `"admin"`, `"system"`。
-    - `created_at` (字符串): 消息创建时间的 ISO 8601 格式字符串。
-    - `is_read` (布尔值): 消息是否已读。
-    - `sender_id` (整数 | null): 发送者的ID。对于系统消息，此字段可能为 `null`。
-    - `doc_metadata` (对象 | null): 附加的元数据，例如AI回复引用的文档等。
+    - `message_type` (字符串): 消息类型 (例如 `USER`, `ASSISTANT`, `OFFICIAL`)。
+    - `sender_id` (整数): 发送者ID。
+    - `sender_type` (字符串): 发送者类型 (`third_party` 或 `official`)。
+    - `created_at` (字符串): ISO 8601 格式的时间戳。
+    - `metadata` (对象): 附加元数据。
+- **示例**:
+  ```json
+  {
+    "type": "message.new",
+    "payload": {
+      "message": {
+        "id": 103,
+        "chat_id": 1,
+        "content": "你好，我的订单需要帮助。",
+        "message_type": "USER",
+        "sender_id": 5678,
+        "sender_type": "third_party",
+        "created_at": "2023-10-27T10:00:00Z",
+        "metadata": {}
+      }
+    }
+  }
+  ```
 
-### 4.2. 历史记录响应
+### 4.2 `history.response`
 
-响应客户端的 `history.request` 请求。
+响应 `history.request` 请求，返回历史消息列表。
 
-- **type**: `history.response`
 - **request_id**: 与原始请求的 `request_id` 匹配。
-- **payload**:
-  - `messages` (消息对象数组): 按时间顺序排列的历史消息列表。每个消息对象的结构与 `message.new` 事件中的 `message` 对象相同。
+- **Payload**:
+  - `messages` (消息对象数组): **必须**。消息对象列表，结构与 `message.new` 中的 `message` 相同。
+- **示例**:
+  ```json
+  {
+    "type": "history.response",
+    "payload": {
+      "messages": [ ... ]
+    },
+    "request_id": "req-hist-456"
+  }
+  ```
 
-### 4.3. 输入状态更新
+### 4.3 `typing.update`
 
-当聊天中任何成员的输入状态改变时，服务器广播此事件。
+当聊天中有人（用户或管理员）正在输入或停止输入时广播。
 
-- **type**: `typing.update`
-- **payload**:
-  - `sender` (对象): 触发此事件的用户信息。
-    - `user_id` (整数): 用户的ID。
-    - `client_id` (字符串): 用户的客户端ID。
-    - `user_type` (字符串): 用户类型，如 `"third_party"` 或 `"admin"`。
-  - `is_typing` (布尔值): `true` 表示正在输入，`false` 表示停止输入。
+- **Payload**:
+  - `sender` (对象): **必须**。事件发送者的信息。
+    - `user_id` (整数): 发送者用户ID。
+    - `client_id` (字符串): 发送者客户端ID。
+    - `user_type` (字符串): 发送者类型 (`official` 或 `third_party`)。
+  - `is_typing` (布尔值): **必须**。`true` 表示正在输入。
+- **示例**:
+  ```json
+  {
+    "type": "typing.update",
+    "payload": {
+      "sender": {
+        "user_id": 1234,
+        "client_id": "admin-xyz-789",
+        "user_type": "official"
+      },
+      "is_typing": true
+    }
+  }
+  ```
 
-### 4.4. 系统通知
+### 4.4 `message.read.update`
 
-用于发送系统级通知，例如用户加入/离开聊天、服务模式切换等。
+当消息被读取时广播。
 
-- **type**: `notification.system`
-- **payload**:
-  - `level` (字符串): 通知级别，枚举值包括: `"info"`, `"warning"`, `"error"`。
-  - `content` (字符串): 通知的文本内容。
+- **Payload**:
+  - `sender` (对象): **必须**。读取消息的用户的身份信息，结构同上。
+  - `message_ids` (整数数组): **必须**。被读取的消息ID列表。
+- **示例**:
+  ```json
+  {
+    "type": "message.read.update",
+    "payload": {
+      "sender": {
+        "user_id": 1234,
+        "client_id": "admin-xyz-789",
+        "user_type": "official"
+      },
+      "message_ids": [101, 102]
+    }
+  }
+  ```
 
-### 4.5. 错误响应
+### 4.5 `notification.system`
 
-当客户端的请求因故失败时，服务器发送此事件。
+发送系统级通知，例如用户加入/离开聊天。
 
-- **type**: `response.error`
-- **request_id**: 与导致错误的原始请求的 `request_id` 匹配（如果可用）。
-- **payload**:
-  - `code` (字符串): 机器可读的错误代码，例如 `INVALID_PAYLOAD`, `UNKNOWN_TYPE`。
-  - `message` (字符串): 对错误的详细、人类可读的描述。
+- **Payload**:
+  - `level` (字符串): **必须**。通知级别 (`info`, `warning`, `error`)。
+  - `content` (字符串): **必须**。通知内容。
+- **示例**:
+  ```json
+  {
+    "type": "notification.system",
+    "payload": {
+      "level": "info",
+      "content": "管理员已加入聊天"
+    }
+  }
+  ```
+
+### 4.6 `response.error`
+
+当处理C2S请求发生错误时，服务器发送此响应。
+
+- **request_id**: 与导致错误的原始请求的 `request_id` 匹配。
+- **Payload**:
+  - `code` (字符串): **必须**。标准化的错误码 (例如 `INVALID_PAYLOAD`, `UNKNOWN_TYPE`)。
+  - `message` (字符串): **必须**。详细的错误信息。
+- **示例**:
+  ```json
+  {
+    "type": "response.error",
+    "payload": {
+      "code": "INVALID_FORMAT",
+      "message": "消息缺少 'type' 字段。"
+    },
+    "request_id": "req-msg-bad-123"
+  }
+  ```

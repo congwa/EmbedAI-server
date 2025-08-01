@@ -14,13 +14,13 @@ from app.core.ws import connection_manager
 
 class ChatWebSocketManager:
     """
-    Manages WebSocket chat connections, implementing V2 of the chat protocol.
+    管理WebSocket聊天连接，实现V2聊天协议。
 
-    Protocol V2 Summary:
-    - All messages are JSON objects with `type`, `payload`, and optional `request_id`.
-    - `type` uses a 'domain.action' format (e.g., 'message.create').
-    - `request_id` is used to correlate requests and responses.
-    - Standardized error responses.
+    协议V2摘要:
+    - 所有消息都是JSON对象，包含 `type`, `payload`, 和可选的 `request_id`。
+    - `type` 使用 'domain.action' 格式 (例如, 'message.create')。
+    - `request_id` 用于关联请求和响应。
+    - 标准化的错误响应。
     """
 
     def __init__(
@@ -49,30 +49,30 @@ class ChatWebSocketManager:
         }
 
     async def handle_message(self, message_data: Dict[str, Any]):
-        """Main message handler, dispatches based on message type."""
+        """主消息处理器，根据消息类型分发。"""
         msg_type = message_data.get("type")
         payload = message_data.get("payload", {})
         request_id = message_data.get("request_id")
 
         if msg_type is None:
-            await self._send_error_response("INVALID_FORMAT", "Message 'type' is missing.", request_id)
+            await self._send_error_response("INVALID_FORMAT", "消息缺少 'type' 字段。", request_id)
             return
 
         handler = self.message_handlers.get(msg_type)
         if handler:
             await handler(payload, request_id)
         else:
-            await self._send_error_response("UNKNOWN_TYPE", f"Unknown message type: {msg_type}", request_id)
+            await self._send_error_response("UNKNOWN_TYPE", f"未知的消息类型: {msg_type}", request_id)
 
     async def _send_response(self, type: str, payload: Dict[str, Any], request_id: Optional[str] = None):
-        """Sends a structured response to the client."""
+        """向客户端发送结构化响应。"""
         response = {"type": type, "payload": payload}
         if request_id:
             response["request_id"] = request_id
         await self.websocket.send_json(response)
 
     async def _send_error_response(self, code: str, message: str, request_id: Optional[str] = None):
-        """Sends a standardized error response."""
+        """发送标准化的错误响应。"""
         await self._send_response(
             "response.error",
             {"code": code, "message": message},
@@ -80,7 +80,7 @@ class ChatWebSocketManager:
         )
 
     async def _broadcast_event(self, type: str, payload: Dict[str, Any], exclude_self: bool = True):
-        """Broadcasts an event to all clients in the chat."""
+        """向聊天中的所有客户端广播一个事件。"""
         event_message = {
             "type": type,
             "payload": {
@@ -100,7 +100,7 @@ class ChatWebSocketManager:
         )
 
     async def _handle_create_message(self, payload: Dict[str, Any], request_id: Optional[str]):
-        """Handles incoming new messages."""
+        """处理接收到的新消息。"""
         content = payload.get("content")
         if not content:
             await self._send_error_response("INVALID_PAYLOAD", "Message content is missing.", request_id)
@@ -121,7 +121,7 @@ class ChatWebSocketManager:
             await self._handle_ai_response(content)
 
     async def _handle_history_request(self, payload: Dict[str, Any], request_id: Optional[str]):
-        """Handles request for message history."""
+        """处理消息历史记录请求。"""
         before_message_id = payload.get("before_message_id")
         limit = payload.get("limit", 20)
 
@@ -138,7 +138,7 @@ class ChatWebSocketManager:
         )
 
     async def _handle_get_members_request(self, payload: Dict[str, Any], request_id: Optional[str]):
-        """Handles request for chat members."""
+        """处理聊天成员列表请求。"""
         members = connection_manager.get_clients_in_chat(self.chat_id)
         member_ids = list(members.keys())
         await self._send_response(
@@ -148,15 +148,15 @@ class ChatWebSocketManager:
         )
 
     async def _handle_typing_event(self, payload: Dict[str, Any], request_id: Optional[str]):
-        """Handles typing start/stop events."""
+        """处理正在输入开始/停止事件。"""
         is_typing = payload.get("is_typing", False)
         await self._broadcast_event("typing.update", {"is_typing": is_typing})
 
     async def _handle_read_event(self, payload: Dict[str, Any], request_id: Optional[str]):
-        """Handles message read receipts."""
+        """处理消息已读回执。"""
         message_ids = payload.get("message_ids", [])
         if not isinstance(message_ids, list):
-            await self._send_error_response("INVALID_PAYLOAD", "'message_ids' must be a list.", request_id)
+            await self._send_error_response("INVALID_PAYLOAD", "'message_ids' 必须是一个列表。", request_id)
             return
 
         await self.chat_service.mark_messages_as_read(
@@ -167,7 +167,7 @@ class ChatWebSocketManager:
         await self._broadcast_event("message.read.update", {"message_ids": message_ids})
 
     async def _handle_ai_response(self, user_query: str):
-        """Generates and broadcasts an AI response."""
+        """生成并广播AI响应。"""
         try:
             chat = await self.chat_service.get_chat(self.chat_id)
             ai_response = await self.chat_ai_service.generate_response(
@@ -185,19 +185,19 @@ class ChatWebSocketManager:
             )
             await self._broadcast_event("message.new", {"message": json.loads(ai_message.to_json())}, exclude_self=False)
         except Exception as e:
-            Logger.error(f"AI response generation failed: {e}", chat_id=self.chat_id, error=str(e))
+            Logger.error(f"AI响应生成失败: {e}", chat_id=self.chat_id, error=str(e))
             await self._broadcast_event(
                 "notification.system",
-                {"level": "error", "content": "Sorry, an error occurred while generating a response."},
+                {"level": "error", "content": "抱歉，生成AI响应时发生错误。"},
                 exclude_self=False
             )
 
     async def send_initial_history(self):
-        """Sends initial message history upon connection."""
+        """连接成功后发送初始消息历史记录。"""
         await self._handle_history_request({"limit": 20}, None)
 
     async def send_notification(self, content: str, level: str = "info"):
-        """Sends a system notification to all users in the chat."""
+        """向聊天中的所有用户发送系统通知。"""
         await self._broadcast_event(
             "notification.system",
             {"level": level, "content": content},
