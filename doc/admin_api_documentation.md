@@ -199,26 +199,36 @@
       "is_typing": true
     }
   }
-  ```
 
 ### 4.4 `message.read.update`
 
-当消息被读取时广播。
+当一条或多条消息被标记为已读时，服务器会向聊天中的所有客户端（包括发送者）广播此事件。
 
 - **Payload**:
-  - `sender` (对象): **必须**。读取消息的用户的身份信息，结构同上。
-  - `message_ids` (整数数组): **必须**。被读取的消息ID列表。
+  - `sender` (对象): **必须**。发起已读操作的用户的身份信息。
+  - `messages` (消息对象数组): **必须**。已更新的消息对象列表，其结构与 `message.new` 中的 `message` 相同。这些对象将包含更新后的已读状态（例如，`read_by` 字段）。
 - **示例**:
   ```json
   {
     "type": "message.read.update",
     "payload": {
       "sender": {
-        "user_id": 1234,
+        "user_id": 1001,
         "client_id": "admin-xyz-789",
         "user_type": "official"
       },
-      "message_ids": [101, 102]
+      "messages": [
+        {
+          "id": 101,
+          "chat_id": 1,
+          "content": "我遇到了一个问题。",
+          "message_type": "TEXT",
+          "sender_id": 5678,
+          "created_at": "2023-10-27T10:00:00Z",
+          "metadata": {},
+          "read_by": [1001]
+        }
+      ]
     }
   }
   ```

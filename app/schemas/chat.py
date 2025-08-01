@@ -62,6 +62,7 @@ class ChatResponse(CustomBaseModel):
     created_at: datetime = Field(..., description="创建时间") 
     updated_at: datetime = Field(..., description="更新时间")
     is_active: bool = Field(..., description="是否活跃")
+    unread_count: int = Field(0, description="未读消息数")
     messages: Optional[List[ChatMessageResponse]] = Field(default=None, description="会话中的消息列表")
     model_config = ConfigDict(from_attributes=True)
 

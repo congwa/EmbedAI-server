@@ -20,7 +20,7 @@ from app.schemas.chat import (
 # 创建管理员聊天路由
 router = APIRouter()
 
-@router.get("/", response_model=ResponseModel[List[ChatListResponse]])
+@router.get("/", response_model=ResponseModel[ChatListResponse])
 async def list_chats(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -36,14 +36,14 @@ async def list_chats(
     2. 所有AI模式的会话
     """
     chat_service = ChatService(db)
-    chats = await chat_service.list_admin_chats(
+    chats, total = await chat_service.list_admin_chats(
         admin_id=current_admin.id,
         skip=skip,
         limit=limit,
         include_inactive=include_inactive,
         all_chats=all_chats
     )
-    return APIResponse.success(data=chats)
+    return APIResponse.success(data=ChatListResponse(items=chats, total=total))
 
 @router.get("/{chat_id}", response_model=ResponseModel[ChatResponse])
 async def get_chat(
@@ -56,10 +56,16 @@ async def get_chat(
     chat = await chat_service.get_chat(chat_id)
     
     # 标记消息为已读
-    await chat_service.mark_messages_as_read(
-        chat_id=chat_id,
-        user_id=current_admin.id
-    )
+    # 获取聊天中的所有消息ID
+    messages, _ = await chat_service.list_messages(chat_id=chat_id, page=1, page_size=9999)
+    message_ids = [msg.id for msg in messages]
+
+    if message_ids:
+        await chat_service.mark_messages_as_read(
+            chat_id=chat_id,
+            identity_id=current_admin.identity_id,
+            message_ids=message_ids
+        )
     
     return APIResponse.success(data=chat)
 
