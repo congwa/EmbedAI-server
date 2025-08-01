@@ -2,6 +2,7 @@
 RAG相关日志记录模块
 """
 from typing import Dict, Any, List
+from typing import Optional, Any
 from .base_logger import BaseLogger
 
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.models.database import get_db
 from app.services.chat import ChatService
-from app.schemas.chat import ChatResponse, ChatListResponse, ChatRequest, ChatMessageResponse
+from app.schemas.chat import ChatResponse, ChatListResponse, ChatRequest, ChatMessageResponse, MarkReadRequest, MessageResponse
 from typing import Optional, List
 from app.core.response import ResponseModel, APIResponse
 from app.core.logger import Logger
@@ -87,12 +87,12 @@ async def get_chat(
     
     return APIResponse.success(data=chat)
 
-@router.get("/{chat_id}/messages", response_model=ResponseModel[List[ChatMessageResponse]])
-async def list_chat_messages(
+@router.get("/{chat_id}/messages", response_model=ResponseModel)
+async def get_messages(
     chat_id: int,
     third_party_user_id: int,
-    skip: int = 0,
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 20,
     db: Session = Depends(get_db)
 ):
     """获取聊天消息列表"""
@@ -103,14 +103,18 @@ async def list_chat_messages(
         raise HTTPException(status_code=403, detail="您无权访问该聊天会话")
     
     # 获取消息
-    messages = await chat_service.get_chat_messages(
+    user = await chat_service.get_or_create_third_party_user(third_party_user_id)
+    if not user.identity:
+        raise HTTPException(status_code=404, detail="User identity not found")
+
+    messages_data = await chat_service.get_messages(
         chat_id=chat_id,
-        user_id=third_party_user_id,
-        skip=skip,
-        limit=limit
+        user_identity_id=user.identity.id,
+        page=page,
+        page_size=page_size
     )
     
-    return APIResponse.success(data=messages)
+    return APIResponse.success(data=messages_data)
 
 @router.delete("/{chat_id}", response_model=ResponseModel)
 async def delete_chat(
@@ -131,4 +135,30 @@ async def delete_chat(
         user_id=third_party_user_id
     )
     
-    return APIResponse.success(data={"message": "聊天会话已删除", "chat_id": chat_id}) 
+    return APIResponse.success(data={"message": "聊天会话已删除", "chat_id": chat_id})
+
+
+@router.post("/{chat_id}/mark_read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_messages_as_read(
+    chat_id: int,
+    third_party_user_id: int,
+    request: MarkReadRequest,
+    db: Session = Depends(get_db),
+):
+    """将指定会话中的消息标记为已读"""
+    chat_service = ChatService(db)
+
+    # 验证会话所有权
+    if not await chat_service.check_chat_ownership(chat_id, third_party_user_id):
+        raise HTTPException(status_code=403, detail="您无权访问该聊天会话")
+
+    user = await chat_service.get_or_create_third_party_user(third_party_user_id)
+    if not user.identity:
+        raise HTTPException(status_code=404, detail="User identity not found")
+
+    await chat_service.mark_messages_as_read(
+        chat_id=chat_id,
+        user_identity_id=user.identity.id,
+        last_read_message_id=request.last_read_message_id
+    )
+    return 

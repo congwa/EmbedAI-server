@@ -38,14 +38,7 @@ from .performance_logger import PerformanceLogger
 from .operation_logger import OperationLogger
 
 
-class Logger(
-    BaseLogger,
-    APILogger,
-    DatabaseLogger,
-    ServiceLogger,
-    RAGLogger,
-    PerformanceLogger
-):
+class Logger(BaseLogger):
     """
     统一的日志记录器类，继承所有功能模块
 

@@ -6,17 +6,7 @@ from .enums import ChatMode, MessageType
 from .associations import message_read_status
 
 class Chat(Base):
-    """聊天会话模型
-    
-    用于存储第三方用户与知识库的聊天会话信息：
-    1. 一个第三方用户可以与同一个知识库创建多个会话
-    2. 每个会话包含多条消息记录
-    3. 会话标题默认使用第一条用户消息
-    4. 会话按最后更新时间排序
-    5. 会话ID在全局范围内唯一
-    6. 支持软删除，删除的会话不会真正从数据库中删除
-    7. 支持AI模式和人工模式切换
-    """
+    """聊天会话模型"""
     __tablename__ = "chats"
     __table_args__ = (
         Index('idx_user_kb', 'third_party_user_id', 'knowledge_base_id'),
@@ -33,30 +23,22 @@ class Chat(Base):
     deleted_at = Column(DateTime, nullable=True, comment='删除时间')
     last_message_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment='最后消息时间')
     
-    # 外键关联
     third_party_user_id = Column(Integer, ForeignKey("third_party_users.id", ondelete="CASCADE"), nullable=False, comment='第三方用户ID')
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, comment='知识库ID')
     current_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment='当前服务的管理员ID')
     
-    # 关系定义
     third_party_user = relationship("ThirdPartyUser", back_populates="chats")
     knowledge_base = relationship("KnowledgeBase", back_populates="chats")
     current_admin = relationship("User", foreign_keys=[current_admin_id])
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
     sessions = relationship("ChatSession", back_populates="chat", cascade="all, delete-orphan")
+    user_last_read = relationship("ChatUserLastRead", back_populates="chat", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Chat {self.id}: {self.title}>"
 
 class ChatMessage(Base):
-    """聊天消息模型
-    
-    存储聊天会话中的具体消息内容：
-    1. 包括用户的问题、知识库的回答和管理员的回复
-    2. 消息按创建时间排序
-    3. 支持存储元数据（如相关文档引用）
-    4. 支持消息已读状态
-    """
+    """聊天消息模型"""
     __tablename__ = "chat_messages"
     __table_args__ = (
         Index('idx_message_created_at', 'created_at'),
@@ -68,17 +50,16 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.now, comment='创建时间')
     doc_metadata = Column(JSON, nullable=True, comment='消息元数据，如相关文档引用等')
     
-    # 外键关联
     chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, comment='所属会话ID')
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment='发送者ID（管理员）')
     
-    # 关系定义
     chat = relationship("Chat", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
     read_by = relationship("UserIdentity", secondary=message_read_status, back_populates="read_messages", lazy="selectin")
 
     def __repr__(self):
-        return f"<ChatMessage {self.id}: {self.message_type}>" 
+        return f"<ChatMessage {self.id}: {self.message_type}>"
+
     def to_json(self):
         """Converts the message object to a JSON string."""
         import json
@@ -112,3 +93,41 @@ class ChatMessage(Base):
             "doc_metadata": self.doc_metadata,
             "read_by": read_by_list
         })
+
+class ChatSession(Base):
+    """聊天会话参与者与状态模型"""
+    __tablename__ = "chat_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True, comment='会话记录ID')
+    is_online = Column(Boolean, default=False, comment='是否在线')
+    joined_at = Column(DateTime, default=datetime.now, comment='加入时间')
+    left_at = Column(DateTime, nullable=True, comment='离开时间')
+    
+    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, comment='所属会话ID')
+    user_identity_id = Column(Integer, ForeignKey("user_identities.id", ondelete="CASCADE"), nullable=False, comment='用户身份ID')
+    
+    chat = relationship("Chat", back_populates="sessions")
+    user_identity = relationship("UserIdentity", back_populates="chat_sessions")
+
+    def __repr__(self):
+        return f"<ChatSession chat={self.chat_id} user={self.user_identity_id}>"
+
+class ChatUserLastRead(Base):
+    """跟踪用户在会话中的最后已读消息ID"""
+    __tablename__ = 'chat_user_last_read'
+    __table_args__ = (
+        Index('idx_user_chat_last_read', 'user_identity_id', 'chat_id', unique=True),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_identity_id = Column(Integer, ForeignKey('user_identities.id', ondelete="CASCADE"), nullable=False)
+    chat_id = Column(Integer, ForeignKey('chats.id', ondelete="CASCADE"), nullable=False)
+    last_read_message_id = Column(Integer, ForeignKey('chat_messages.id', ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    user_identity = relationship("UserIdentity", back_populates="last_read_chats")
+    chat = relationship("Chat", back_populates="user_last_read")
+    last_read_message = relationship("ChatMessage")
+
+    def __repr__(self):
+        return f"<ChatUserLastRead user={self.user_identity_id} chat={self.chat_id} last_read={self.last_read_message_id}>"

@@ -135,21 +135,22 @@ async def send_admin_message(
         raise HTTPException(403, "您不是当前会话的服务人员")
     
     # 发送消息
-    chat_message = await chat_service.add_message(
+    chat_message = await chat_service.send_message(
         chat_id=chat_id,
         content=message.content,
         message_type=MessageType.ADMIN,
         sender_id=current_admin.id,
-        doc_metadata=message.metadata
+        doc_metadata=message.doc_metadata,
+        sender_identity_id=current_admin.identity.id
     )
     
     return APIResponse.success(data=chat_message)
 
-@router.get("/{chat_id}/messages", response_model=ResponseModel[List[ChatMessageResponse]])
+@router.get("/{chat_id}/messages", response_model=ResponseModel)
 async def list_chat_messages(
     chat_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     current_admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -158,13 +159,14 @@ async def list_chat_messages(
     chat = await chat_service.get_chat(chat_id)
     
     # 获取消息列表
-    messages, total = await chat_service.list_messages(
+    messages_data = await chat_service.get_messages(
         chat_id=chat_id,
-        page=(skip // limit) + 1,
-        page_size=limit
+        user_identity_id=current_admin.identity.id,
+        page=page,
+        page_size=page_size
     )
     
-    return APIResponse.success(data=messages)
+    return APIResponse.success(data=messages_data)
 
 @router.get("/users/{third_party_user_id}/stats", response_model=ResponseModel)
 async def get_user_chat_stats(

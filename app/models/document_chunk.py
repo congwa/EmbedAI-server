@@ -13,7 +13,7 @@ class DocumentChunk(Base):
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, comment='文档ID')
     content = Column(Text, nullable=False, comment='分块内容')
     chunk_index = Column(Integer, nullable=False, comment='分块索引')
-    metadata = Column(JSON, nullable=True, comment='分块元数据')
+    chunk_metadata = Column(JSON, nullable=True, comment='分块元数据')
     
     # 时间字段
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")

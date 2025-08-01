@@ -310,7 +310,7 @@ class RAGTrainingManager:
                                 document_id=document.id,
                                 content=chunk_text,
                                 chunk_index=i,
-                                metadata={},
+                                chunk_metadata={},
                             )
                             self.db.add(chunk)
                             chunk_count += 1

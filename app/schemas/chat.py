@@ -85,3 +85,7 @@ class ChatRequest(BaseModel):
     third_party_user_id: int
     kb_id: int
     title: Optional[str] = None
+
+class MarkReadRequest(BaseModel):
+    """标记消息已读的请求模型"""
+    last_read_message_id: int = Field(..., description="最后一条已读消息的ID")
