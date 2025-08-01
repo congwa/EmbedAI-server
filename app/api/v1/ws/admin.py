@@ -96,11 +96,10 @@ async def admin_chat_websocket(
             db=db
         )
         
-        # 发送初始历史记录
-        await ws_manager._handle_history_request({"limit": 20})
-
-        # 广播管理员加入通知
+        # 发送初始历史记录和加入通知
+        await ws_manager.send_initial_history()
         await ws_manager.send_notification(f"管理员 {admin_id} 已加入聊天")
+
         connection_time = time.time() - start_time
         Logger.info(
             f"管理员WebSocket连接成功，耗时: {connection_time:.2f}秒",
@@ -109,30 +108,14 @@ async def admin_chat_websocket(
             admin_id=admin_id,
             trace_id=trace_id
         )
-        
+
         try:
             while True:
-                # 接收消息
                 message_data = await websocket.receive_json()
-                
-                # 处理心跳
-                if message_data.get("type") == "ping":
-                    await websocket.send_json({"type": "pong", "trace_id": trace_id})
-                    Logger.debug(
-                        "管理员心跳",
-                        chat_id=chat_id,
-                        client_id=client_id,
-                        admin_id=admin_id
-                    )
-                    continue
-                    
-                # 处理管理员消息
-                await ws_manager.handle_admin_message(message_data)
-                
+                await ws_manager.handle_message(message_data)
+
         except WebSocketDisconnect:
-            # 广播管理员离开通知
             await ws_manager.send_notification(f"管理员 {admin_id} 已离开聊天")
-            # 清理连接
             connection_manager.disconnect(chat_id, client_id)
             await session_manager.close_session(chat_id, client_id)
             Logger.websocket_event(

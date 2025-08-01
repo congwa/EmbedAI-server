@@ -94,24 +94,4 @@
 
 ### 3.1 用户实时聊天
 
-- **方法**: `WEBSOCKET`
-- **路径**: `/ws/chat/{chat_id}`
-- **描述**: 第三方用户通过WebSocket连接进行实时聊天。
-- **路径参数**:
-  - `chat_id` (int, required): 聊天会话ID。
-- **查询参数**:
-  - `client_id` (str, required): 用于标识调用方客户端的唯一ID。
-  - `third_party_user_id` (int, required): 第三方用户ID。
-- **WebSocket 消息**:
-  - **客户端发送**:
-    - **心跳**: `{"type": "ping"}`
-    - **用户消息**:
-      ```json
-      {
-        "type": "user_message",
-        "content": "你好，我想咨询一个问题。"
-      }
-      ```
-  - **服务端接收**:
-    - **心跳响应**: `{"type": "pong", "trace_id": "..."}`
-    - **消息确认/流式响应**: 服务端会推送AI或管理员的回复。
+请看 [./client_api_documentation.md](./client_api_documentation.md)

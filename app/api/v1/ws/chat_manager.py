@@ -1,7 +1,8 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable, Awaitable
 from fastapi import WebSocket, status
 from sqlalchemy.orm import Session
 import time
+import json
 
 from app.services.chat import ChatService
 from app.services.chat_ai import ChatAIService
@@ -12,11 +13,16 @@ from app.core.logger import Logger
 from app.core.ws import connection_manager
 
 class ChatWebSocketManager:
-    """聊天WebSocket管理器
-    
-    负责处理WebSocket连接的消息处理、会话验证和消息广播
     """
-    
+    Manages WebSocket chat connections, implementing V2 of the chat protocol.
+
+    Protocol V2 Summary:
+    - All messages are JSON objects with `type`, `payload`, and optional `request_id`.
+    - `type` uses a 'domain.action' format (e.g., 'message.create').
+    - `request_id` is used to correlate requests and responses.
+    - Standardized error responses.
+    """
+
     def __init__(
         self,
         websocket: WebSocket,
@@ -31,205 +37,93 @@ class ChatWebSocketManager:
         self.chat_service = ChatService(db)
         self.chat_ai_service = ChatAIService(db)
         self.session_manager = SessionManager(db)
-        
-        # 初始化链路追踪
-        trace_id = websocket.headers.get("X-Trace-ID")
-        self.trace_id = Logger.init_trace(
-            trace_id=trace_id,
-            chat_id=chat_id,
-            client_id=user_context.client_id,
-            user_id=user_context.user_id,
-            user_type=user_context.user_type
-        )
-        
-        Logger.websocket_event(
-            event_type="连接初始化",
-            chat_id=chat_id,
-            client_id=user_context.client_id,
-            user_id=user_context.user_id,
-            user_type=user_context.user_type
-        )
+        self.trace_id = Logger.get_trace_id()
 
-    async def send_message(self, message: Dict[str, Any]):
-        """发送格式化消息到当前WebSocket"""
-        await self.websocket.send_json(message)
-
-    def _format_message_for_response(self, message: Any, message_type: str = "message") -> Dict[str, Any]:
-        """格式化消息以便发送"""
-        return {
-            "type": message_type,
-            "data": {
-                "id": message.id,
-                "content": message.content,
-                "message_type": message.message_type,
-                "created_at": message.created_at.isoformat(),
-                "sender_id": message.sender_id,
-                "doc_metadata": message.doc_metadata,
-                "trace_id": self.trace_id
-            }
+        self.message_handlers: Dict[str, Callable[[Dict[str, Any], Optional[str]], Awaitable[None]]] = {
+            "message.create": self._handle_create_message,
+            "history.request": self._handle_history_request,
+            "members.request": self._handle_get_members_request,
+            "typing.start": self._handle_typing_event,
+            "typing.stop": self._handle_typing_event,
+            "message.read": self._handle_read_event,
         }
 
-    async def send_notification(self, content: str, message_type: str = "system"):
-        """向聊天室广播通知"""
-        notification = await self.chat_service.add_message(
+    async def handle_message(self, message_data: Dict[str, Any]):
+        """Main message handler, dispatches based on message type."""
+        msg_type = message_data.get("type")
+        payload = message_data.get("payload", {})
+        request_id = message_data.get("request_id")
+
+        if msg_type is None:
+            await self._send_error_response("INVALID_FORMAT", "Message 'type' is missing.", request_id)
+            return
+
+        handler = self.message_handlers.get(msg_type)
+        if handler:
+            await handler(payload, request_id)
+        else:
+            await self._send_error_response("UNKNOWN_TYPE", f"Unknown message type: {msg_type}", request_id)
+
+    async def _send_response(self, type: str, payload: Dict[str, Any], request_id: Optional[str] = None):
+        """Sends a structured response to the client."""
+        response = {"type": type, "payload": payload}
+        if request_id:
+            response["request_id"] = request_id
+        await self.websocket.send_json(response)
+
+    async def _send_error_response(self, code: str, message: str, request_id: Optional[str] = None):
+        """Sends a standardized error response."""
+        await self._send_response(
+            "response.error",
+            {"code": code, "message": message},
+            request_id
+        )
+
+    async def _broadcast_event(self, type: str, payload: Dict[str, Any], exclude_self: bool = True):
+        """Broadcasts an event to all clients in the chat."""
+        event_message = {
+            "type": type,
+            "payload": {
+                "sender": {
+                    "user_id": self.user_context.user_id,
+                    "client_id": self.user_context.client_id,
+                    "user_type": self.user_context.user_type.value
+                },
+                **payload
+            }
+        }
+        exclude_client = self.user_context.client_id if exclude_self else None
+        await connection_manager.broadcast_to_chat(
+            self.chat_id,
+            event_message,
+            exclude_client=exclude_client
+        )
+
+    async def _handle_create_message(self, payload: Dict[str, Any], request_id: Optional[str]):
+        """Handles incoming new messages."""
+        content = payload.get("content")
+        if not content:
+            await self._send_error_response("INVALID_PAYLOAD", "Message content is missing.", request_id)
+            return
+
+        message = await self.chat_service.add_message(
             chat_id=self.chat_id,
             content=content,
-            message_type=MessageType.SYSTEM,
-            doc_metadata={"trace_id": self.trace_id}
-        )
-        await self._broadcast_message(notification, message_type=message_type)
-
-    async def handle_user_message(
-        self,
-        message_data: Dict[str, Any]
-    ) -> None:
-        """处理用户消息"""
-        start_time = time.time()
-        
-        # 处理历史记录请求
-        if message_data.get("type") == "get_history":
-            await self._handle_history_request(message_data)
-            return
-        elif message_data.get("type") == "get_members":
-            await self._handle_get_members_request()
-            return
-
-        Logger.websocket_event(
-            event_type="收到用户消息",
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            message_length=len(message_data.get("content", ""))
-        )
-        
-        # 验证会话状态
-        if not await self.session_manager.validate_session(
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            third_party_user_id=self.user_context.user_id
-        ):
-            Logger.warning(
-                "会话验证失败，关闭WebSocket连接",
-                chat_id=self.chat_id,
-                client_id=self.user_context.client_id,
-                user_id=self.user_context.user_id
-            )
-            await self.websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-            
-        # 添加用户消息
-        message = await self.chat_service.add_message(
-            chat_id=self.chat_id,
-            content=message_data["content"],
-            message_type=MessageType.USER,
+            message_type=MessageType.USER if self.user_context.user_type == "third_party" else MessageType.ADMIN,
             sender_id=self.user_context.user_id,
-            doc_metadata={
-                "client_id": self.user_context.client_id,
-                "identity_id": self.user_context.identity_id,
-                "trace_id": self.trace_id
-            }
-        )
-        
-        # 广播消息
-        await self._broadcast_message(message)
-        
-        # 获取聊天模式
-        chat = await self.chat_service.get_chat(self.chat_id)
-        
-        # AI模式自动回复
-        if chat.chat_mode == ChatMode.AI:
-            await self._handle_ai_response(message_data["content"])
-            
-        process_time = time.time() - start_time
-        Logger.info(
-            f"用户消息处理完成，耗时: {process_time:.2f}秒",
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            process_time=process_time
-        )
-            
-    async def handle_admin_message(
-        self,
-        message_data: Dict[str, Any]
-    ) -> None:
-        """处理管理员消息"""
-        start_time = time.time()
-        
-        # 处理历史记录请求
-        if message_data.get("type") == "get_history":
-            await self._handle_history_request(message_data)
-            return
-        elif message_data.get("type") == "get_members":
-            await self._handle_get_members_request()
-            return
-
-        Logger.websocket_event(
-            event_type="收到管理员消息",
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            message_length=len(message_data.get("content", ""))
-        )
-        
-        # 验证会话状态
-        if not await self.session_manager.validate_session(
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            official_user_id=self.user_context.user_id
-        ):
-            Logger.warning(
-                "管理员会话验证失败，关闭WebSocket连接",
-                chat_id=self.chat_id,
-                client_id=self.user_context.client_id,
-                admin_id=self.user_context.user_id
-            )
-            await self.websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-            
-        # 获取聊天模式
-        chat = await self.chat_service.get_chat(self.chat_id)
-        if chat.chat_mode != ChatMode.HUMAN:
-            Logger.warning(
-                "当前不是人工服务模式，拒绝处理管理员消息",
-                chat_id=self.chat_id,
-                client_id=self.user_context.client_id,
-                admin_id=self.user_context.user_id,
-                chat_mode=chat.chat_mode
-            )
-            await self.websocket.send_json({
-                "type": "error",
-                "message": "当前不是人工服务模式"
-            })
-            return
-            
-        # 添加管理员消息
-        message = await self.chat_service.add_message(
-            chat_id=self.chat_id,
-            content=message_data["content"],
-            message_type=MessageType.ADMIN,
-            sender_id=self.user_context.user_id,
-            doc_metadata={
-                "client_id": self.user_context.client_id,
-                "identity_id": self.user_context.identity_id,
-                "is_admin": True,
-                "trace_id": self.trace_id
-            }
-        )
-        
-        # 广播消息
-        await self._broadcast_message(message)
-        
-        process_time = time.time() - start_time
-        Logger.info(
-            f"管理员消息处理完成，耗时: {process_time:.2f}秒",
-            chat_id=self.chat_id,
-            client_id=self.user_context.client_id,
-            admin_id=self.user_context.user_id,
-            process_time=process_time
+            doc_metadata={"client_id": self.user_context.client_id, "trace_id": self.trace_id}
         )
 
-    async def _handle_history_request(self, message_data: Dict[str, Any]):
-        """处理历史记录请求"""
-        before_message_id = message_data.get("before_message_id")
-        limit = message_data.get("limit", 20)
+        await self._broadcast_event("message.new", {"message": json.loads(message.to_json())}, exclude_self=False)
+
+        chat = await self.chat_service.get_chat(self.chat_id)
+        if chat.chat_mode == ChatMode.AI and self.user_context.user_type == "third_party":
+            await self._handle_ai_response(content)
+
+    async def _handle_history_request(self, payload: Dict[str, Any], request_id: Optional[str]):
+        """Handles request for message history."""
+        before_message_id = payload.get("before_message_id")
+        limit = payload.get("limit", 20)
 
         history = await self.chat_service.get_message_history(
             chat_id=self.chat_id,
@@ -237,119 +131,75 @@ class ChatWebSocketManager:
             limit=limit
         )
 
-        response = {
-            "type": "history",
-            "data": [self._format_message_for_response(msg)["data"] for msg in history]
-        }
-        await self.send_message(response)
+        await self._send_response(
+            "history.response",
+            {"messages": [json.loads(msg.to_json()) for msg in history]},
+            request_id
+        )
 
-    async def _handle_get_members_request(self):
-        """处理获取成员列表的请求"""
+    async def _handle_get_members_request(self, payload: Dict[str, Any], request_id: Optional[str]):
+        """Handles request for chat members."""
         members = connection_manager.get_clients_in_chat(self.chat_id)
         member_ids = list(members.keys())
-        
-        response = {
-            "type": "members",
-            "data": {
-                "members": member_ids,
-                "count": len(member_ids)
-            }
-        }
-        await self.send_message(response)
-        
-    async def _handle_ai_response(
-        self,
-        user_query: str
-    ) -> None:
-        """处理AI回复"""
-        start_time = time.time()
-        
-        Logger.info(
-            "开始生成AI回复",
-            chat_id=self.chat_id,
-            query_length=len(user_query)
+        await self._send_response(
+            "members.response",
+            {"members": member_ids, "count": len(member_ids)},
+            request_id
         )
-        
+
+    async def _handle_typing_event(self, payload: Dict[str, Any], request_id: Optional[str]):
+        """Handles typing start/stop events."""
+        is_typing = payload.get("is_typing", False)
+        await self._broadcast_event("typing.update", {"is_typing": is_typing})
+
+    async def _handle_read_event(self, payload: Dict[str, Any], request_id: Optional[str]):
+        """Handles message read receipts."""
+        message_ids = payload.get("message_ids", [])
+        if not isinstance(message_ids, list):
+            await self._send_error_response("INVALID_PAYLOAD", "'message_ids' must be a list.", request_id)
+            return
+
+        await self.chat_service.mark_messages_as_read(
+            chat_id=self.chat_id,
+            message_ids=message_ids,
+            user_id=self.user_context.user_id
+        )
+        await self._broadcast_event("message.read.update", {"message_ids": message_ids})
+
+    async def _handle_ai_response(self, user_query: str):
+        """Generates and broadcasts an AI response."""
         try:
-            # 获取知识库ID
             chat = await self.chat_service.get_chat(self.chat_id)
-            
-            # 生成AI回复
             ai_response = await self.chat_ai_service.generate_response(
                 chat_id=self.chat_id,
                 user_query=user_query,
                 kb_id=chat.knowledge_base_id,
                 user_context=self.user_context
             )
-            
-            # 添加AI消息
+
             ai_message = await self.chat_service.add_message(
                 chat_id=self.chat_id,
                 content=ai_response["content"],
                 message_type=MessageType.ASSISTANT,
-                doc_metadata={
-                    **ai_response["metadata"],
-                    "is_ai": True,
-                    "client_id": self.user_context.client_id,
-                    "identity_id": self.user_context.identity_id,
-                    "trace_id": self.trace_id
-                }
+                doc_metadata={**ai_response["metadata"], "is_ai": True, "trace_id": self.trace_id}
             )
-            
-            # 广播AI回复
-            await self._broadcast_message(ai_message)
-            
-            process_time = time.time() - start_time
-            Logger.info(
-                f"AI回复生成成功，耗时: {process_time:.2f}秒",
-                chat_id=self.chat_id,
-                response_length=len(ai_response["content"]),
-                process_time=process_time
-            )
-            
+            await self._broadcast_event("message.new", {"message": json.loads(ai_message.to_json())}, exclude_self=False)
         except Exception as e:
-            process_time = time.time() - start_time
-            Logger.error(
-                f"AI回复生成失败: {str(e)}",
-                chat_id=self.chat_id,
-                error=str(e),
-                process_time=process_time
+            Logger.error(f"AI response generation failed: {e}", chat_id=self.chat_id, error=str(e))
+            await self._broadcast_event(
+                "notification.system",
+                {"level": "error", "content": "Sorry, an error occurred while generating a response."},
+                exclude_self=False
             )
-            
-            # 发送错误消息
-            error_message = await self.chat_service.add_message(
-                chat_id=self.chat_id,
-                content="抱歉，生成回复时发生错误。",
-                message_type=MessageType.SYSTEM,
-                doc_metadata={
-                    "error": str(e),
-                    "client_id": self.user_context.client_id,
-                    "identity_id": self.user_context.identity_id,
-                    "trace_id": self.trace_id
-                }
-            )
-            
-            await self._broadcast_message(
-                error_message,
-                message_type="error"
-            )
-            
-    async def _broadcast_message(
-        self,
-        message: Any,
-        message_type: str = "message"
-    ) -> None:
-        """广播消息"""
-        Logger.debug(
-            f"广播消息: {message_type}",
-            chat_id=self.chat_id,
-            message_id=message.id,
-            message_type=message.message_type,
-            exclude_client=self.user_context.client_id
-        )
-        
-        await connection_manager.broadcast_to_chat(
-            chat_id=self.chat_id,
-            message=self._format_message_for_response(message, message_type),
-            exclude_client=self.user_context.client_id
+
+    async def send_initial_history(self):
+        """Sends initial message history upon connection."""
+        await self._handle_history_request({"limit": 20}, None)
+
+    async def send_notification(self, content: str, level: str = "info"):
+        """Sends a system notification to all users in the chat."""
+        await self._broadcast_event(
+            "notification.system",
+            {"level": level, "content": content},
+            exclude_self=False
         )

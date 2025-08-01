@@ -78,3 +78,15 @@ class ChatMessage(Base):
 
     def __repr__(self):
         return f"<ChatMessage {self.id}: {self.message_type}>" 
+    def to_json(self):
+        """Converts the message object to a JSON string."""
+        import json
+        return json.dumps({
+            "id": self.id,
+            "content": self.content,
+            "message_type": self.message_type.value,
+            "created_at": self.created_at.isoformat(),
+            "is_read": self.is_read,
+            "sender_id": self.sender_id,
+            "doc_metadata": self.doc_metadata
+        })
