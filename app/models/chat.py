@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 from .enums import ChatMode, MessageType
+from .associations import message_read_status
 
 class Chat(Base):
     """聊天会话模型
@@ -65,7 +66,6 @@ class ChatMessage(Base):
     content = Column(String, nullable=False, comment='消息内容')
     message_type = Column(SQLAlchemyEnum(MessageType), nullable=False, comment='消息类型')
     created_at = Column(DateTime, default=datetime.now, comment='创建时间')
-    is_read = Column(Boolean, default=False, comment='是否已读')
     doc_metadata = Column(JSON, nullable=True, comment='消息元数据，如相关文档引用等')
     
     # 外键关联
@@ -75,18 +75,40 @@ class ChatMessage(Base):
     # 关系定义
     chat = relationship("Chat", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
+    read_by = relationship("UserIdentity", secondary=message_read_status, back_populates="read_messages", lazy="selectin")
 
     def __repr__(self):
         return f"<ChatMessage {self.id}: {self.message_type}>" 
     def to_json(self):
         """Converts the message object to a JSON string."""
         import json
+        
+        read_by_list = []
+        if self.read_by:
+            for identity in self.read_by:
+                if identity.official_user_id:
+                    read_by_list.append({
+                        "user_id": identity.official_user_id,
+                        "user_type": "official",
+                        "client_id": identity.client_id
+                    })
+                elif identity.third_party_user_id:
+                    read_by_list.append({
+                        "user_id": identity.third_party_user_id,
+                        "user_type": "third_party",
+                        "client_id": identity.client_id
+                    })
+
         return json.dumps({
             "id": self.id,
+            "chat_id": self.chat_id,
             "content": self.content,
             "message_type": self.message_type.value,
             "created_at": self.created_at.isoformat(),
-            "is_read": self.is_read,
-            "sender_id": self.sender_id,
-            "doc_metadata": self.doc_metadata
+            "sender": {
+                "user_id": self.sender.id if self.sender else None,
+                "user_type": "official" if self.sender else "system"
+            },
+            "doc_metadata": self.doc_metadata,
+            "read_by": read_by_list
         })

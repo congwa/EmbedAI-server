@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
 from fastapi import HTTPException, status
 from app.models.chat import Chat, ChatMessage, MessageType
+from app.models.identity import UserIdentity
 from app.models.third_party_user import ThirdPartyUser
 from app.models.user import User
 from app.models.enums import ChatMode
@@ -46,19 +47,9 @@ class ChatService:
         return await redis_manager.get_cached_chat(chat_id)
         
     async def _cache_message(self, message: ChatMessage) -> None:
-        """缓存消息到Redis"""
-        await redis_manager.cache_message(
-            chat_id=message.chat_id,
-            message_data={
-                "id": message.id,
-                "content": message.content,
-                "message_type": message.message_type,
-                "created_at": message.created_at,
-                "is_read": message.is_read,
-                "sender_id": message.sender_id or 0,
-                "doc_metadata": message.doc_metadata or {}
-            }
-        )
+        """缓存消息到Redis - (已禁用，待重构)"""
+        # TODO: 重构以支持新的 `read_by` 结构
+        pass
         
     async def _get_cached_messages(
         self,
@@ -66,8 +57,9 @@ class ChatService:
         start: int = 0,
         end: int = -1
     ) -> List[Dict]:
-        """从Redis获取缓存的消息"""
-        return await redis_manager.get_cached_messages(chat_id, start, end)
+        """从Redis获取缓存的消息 - (已禁用，待重构)"""
+        # TODO: 重构以支持新的 `read_by` 结构
+        return []
         
     async def get_or_create_third_party_user(self, third_party_user_id: int) -> ThirdPartyUser:
         """获取或创建第三方用户
@@ -363,6 +355,7 @@ class ChatService:
         messages = (await self.db.execute(
             select(ChatMessage)
             .filter(ChatMessage.chat_id == chat_id)
+            .options(selectinload(ChatMessage.read_by))
             .order_by(ChatMessage.created_at)
             .offset(skip)
             .limit(limit)
@@ -437,6 +430,7 @@ class ChatService:
         messages = (await self.db.execute(
             select(ChatMessage)
             .filter(ChatMessage.chat_id == chat_id)
+            .options(selectinload(ChatMessage.read_by))
             .order_by(ChatMessage.created_at.desc())
             .limit(limit)
         )).scalars().all()
@@ -466,6 +460,7 @@ class ChatService:
         query = (
             select(ChatMessage)
             .filter(ChatMessage.chat_id == chat_id)
+            .options(selectinload(ChatMessage.read_by))
         )
         
         if before_message_id:
@@ -481,6 +476,27 @@ class ChatService:
         
         Logger.debug(f"Retrieved {len(messages)} history messages for chat {chat_id} before message {before_message_id}")
         return messages
+
+    async def get_messages_by_ids(self, chat_id: int, message_ids: List[int]) -> List[ChatMessage]:
+        """根据ID列表批量获取消息。
+        
+        Args:
+            chat_id: 会话ID，用于安全校验。
+            message_ids: 消息ID列表。
+            
+        Returns:
+            List[ChatMessage]: 消息对象列表。
+        """
+        if not message_ids:
+            return []
+            
+        messages = await self.db.execute(
+            select(ChatMessage)
+            .options(selectinload(ChatMessage.read_by))
+            .filter(ChatMessage.chat_id == chat_id, ChatMessage.id.in_(message_ids))
+        )
+        
+        return messages.scalars().all()
 
     async def restore_chat(
         self,
@@ -644,21 +660,48 @@ class ChatService:
     async def mark_messages_as_read(
         self,
         chat_id: int,
-        user_id: int
-    ) -> None:
-        """将消息标记为已读"""
-        messages = await self.db.execute(
-            select(ChatMessage).filter(
-                ChatMessage.chat_id == chat_id,
-                ChatMessage.is_read == False,
-                ChatMessage.sender_id != user_id
-            )
+        identity_id: int,
+        message_ids: List[int]
+    ) -> bool:
+        """将指定消息标记为某个用户身份已读。
+
+        Args:
+            chat_id: 聊天ID。
+            identity_id: 读取消息的用户身份ID。
+            message_ids: 要标记为已读的消息ID列表。
+
+        Returns:
+            bool: 操作是否成功。
+        """
+        if not message_ids:
+            return False
+
+        # 获取用户身份
+        identity = await self.db.get(UserIdentity, identity_id)
+        if not identity:
+            Logger.warning(f"尝试为不存在的身份(ID: {identity_id})标记已读时失败")
+            return False
+
+        # 批量获取需要更新的消息，并预加载已读列表
+        messages_to_update = await self.db.execute(
+            select(ChatMessage)
+            .options(selectinload(ChatMessage.read_by))
+            .filter(ChatMessage.id.in_(message_ids), ChatMessage.chat_id == chat_id)
         )
-        
-        for message in messages.scalars():
-            message.is_read = True
-        
-        await self.db.commit()
+        messages = messages_to_update.scalars().all()
+
+        updated = False
+        for message in messages:
+            # 检查该身份是否已经读取过此消息
+            if identity not in message.read_by:
+                message.read_by.append(identity)
+                updated = True
+
+        if updated:
+            await self.db.commit()
+            Logger.info(f"身份 {identity_id} 在聊天 {chat_id} 中将 {len(messages)} 条消息标记为已读")
+
+        return updated
     
     async def get_unread_count(
         self,

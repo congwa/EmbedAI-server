@@ -124,6 +124,10 @@
     - `sender_type` (字符串): 发送者类型 (`third_party` 或 `official`)。
     - `created_at` (字符串): ISO 8601 格式的时间戳。
     - `metadata` (对象): 附加元数据。
+    - `read_by` (用户身份对象数组): **新增**。已读此消息的用户身份列表。如果为空，表示无人已读。
+      - `id` (整数): 用户身份的唯一ID。
+      - `user_id` (整数): 关联的用户ID。
+      - `user_type` (字符串): 用户类型 (`official` 或 `third_party`)。
 - **示例**:
   ```json
   {
@@ -137,7 +141,8 @@
         "sender_id": 5678,
         "sender_type": "third_party",
         "created_at": "2023-10-27T10:00:00Z",
-        "metadata": {}
+        "metadata": {},
+        "read_by": []
       }
     }
   }
@@ -188,22 +193,34 @@
 
 ### 4.4 `message.read.update`
 
-当消息被读取时广播。
+当一条或多条消息被读取时广播。此事件通知所有客户端更新特定消息的已读状态。
 
 - **Payload**:
-  - `sender` (对象): **必须**。读取消息的用户的身份信息，结构同上。
-  - `message_ids` (整数数组): **必须**。被读取的消息ID列表。
+  - `messages` (消息对象数组): **必须**。被更新的消息对象列表。每个对象的结构与 `message.new` 中的 `message` 相同，包含了最新的 `read_by` 列表。
 - **示例**:
   ```json
   {
     "type": "message.read.update",
     "payload": {
-      "sender": {
-        "user_id": 1234,
-        "client_id": "admin-xyz-789",
-        "user_type": "official"
-      },
-      "message_ids": [101, 102]
+      "messages": [
+        {
+          "id": 101,
+          "chat_id": 1,
+          "content": "你好，我的订单需要帮助。",
+          "message_type": "USER",
+          "sender_id": 5678,
+          "sender_type": "third_party",
+          "created_at": "2023-10-27T10:00:00Z",
+          "metadata": {},
+          "read_by": [
+            {
+              "id": 1,
+              "user_id": 1234,
+              "user_type": "official"
+            }
+          ]
+        }
+      ]
     }
   }
   ```

@@ -155,16 +155,28 @@ class ChatWebSocketManager:
     async def _handle_read_event(self, payload: Dict[str, Any], request_id: Optional[str]):
         """处理消息已读回执。"""
         message_ids = payload.get("message_ids", [])
-        if not isinstance(message_ids, list):
-            await self._send_error_response("INVALID_PAYLOAD", "'message_ids' 必须是一个列表。", request_id)
+        if not isinstance(message_ids, list) or not message_ids:
+            await self._send_error_response("INVALID_PAYLOAD", "'message_ids' 必须是一个非空列表。", request_id)
             return
 
-        await self.chat_service.mark_messages_as_read(
+        updated = await self.chat_service.mark_messages_as_read(
             chat_id=self.chat_id,
-            message_ids=message_ids,
-            user_id=self.user_context.user_id
+            identity_id=self.user_context.identity_id,
+            message_ids=message_ids
         )
-        await self._broadcast_event("message.read.update", {"message_ids": message_ids})
+
+        if updated:
+            # 获取更新后的消息对象
+            updated_messages = await self.chat_service.get_messages_by_ids(
+                chat_id=self.chat_id,
+                message_ids=message_ids
+            )
+            # 广播完整的消息更新
+            await self._broadcast_event(
+                "message.read.update",
+                {"messages": [json.loads(msg.to_json()) for msg in updated_messages]},
+                exclude_self=False  # 通知所有客户端，包括发送者
+            )
 
     async def _handle_ai_response(self, user_query: str):
         """生成并广播AI响应。"""

@@ -3,6 +3,7 @@ from typing import Optional, Set
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.models.database import Base
+from .associations import message_read_status
 
 class UserIdentity(Base):
     """用户身份模型，用于管理不同类型用户的身份信息"""
@@ -20,6 +21,7 @@ class UserIdentity(Base):
     official_user = relationship("User", back_populates="identities")
     third_party_user = relationship("ThirdPartyUser", back_populates="identities")
     active_sessions = relationship("ChatSession", back_populates="user_identity")
+    read_messages = relationship("ChatMessage", secondary=message_read_status, back_populates="read_by")
 
 class ChatSession(Base):
     """聊天会话状态模型，用于管理用户在聊天会话中的状态"""
