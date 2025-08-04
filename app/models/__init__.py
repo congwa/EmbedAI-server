@@ -10,5 +10,8 @@ from .chat import Chat, ChatMessage
 from .llm_usage_log import LLMUsageLog
 from .analytics import SystemMetrics, UserActivityLog, KnowledgeBaseMetrics, APIMetrics
 from .health import ServiceHealth, SystemAlert, PerformanceThreshold, HealthCheckConfig, UptimeRecord
+from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSecuritySettings
+from .config import SystemConfig, ConfigChangeLog, ConfigTemplate, ConfigBackup, EnvironmentVariable, ConfigValidationRule
+from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSecuritySettings
 from .enums import PermissionType, TrainingStatus
 from .associations import knowledge_base_users

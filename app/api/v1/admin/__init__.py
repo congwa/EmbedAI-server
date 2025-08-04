@@ -8,6 +8,8 @@ from .knowledge_base import router as kb_router  # 知识库管理
 from .document import router as document_router  # 文档管理
 from .analytics import router as analytics_router  # 分析统计
 from .health import router as health_router  # 健康监控
+from .rbac import router as rbac_router  # 角色权限管理
+from .config import router as config_router  # 系统配置管理
 
 # 创建管理端总路由
 router = APIRouter()
@@ -29,3 +31,9 @@ router.include_router(analytics_router, prefix="/analytics", tags=["admin-analyt
 
 # 健康监控
 router.include_router(health_router, prefix="/health", tags=["admin-health"])
+
+# 角色权限管理
+router.include_router(rbac_router, prefix="/rbac", tags=["admin-rbac"])
+
+# 系统配置管理
+router.include_router(config_router, prefix="/config", tags=["admin-config"])

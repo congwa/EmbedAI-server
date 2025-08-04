@@ -41,5 +41,7 @@ class User(Base):
     # accessible_knowledge_bases 通过 KnowledgeBase 中的 backref 自动创建
     identities = relationship("UserIdentity", back_populates="official_user", passive_deletes=True)
 
+    # RBAC关系定义将在rbac模型中通过backref创建
+
     def __repr__(self):
         return f"<User {self.email}>"
