@@ -14,6 +14,7 @@ from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSe
 from .config import SystemConfig, ConfigChangeLog, ConfigTemplate, ConfigBackup, EnvironmentVariable, ConfigValidationRule
 from .security import TwoFactorAuth, UserSession, IPWhitelist, IPBlacklist, SecurityEvent, PasswordHistory, DeviceFingerprint, SecurityPolicy
 from .content import ContentModerationRule, ContentModerationLog, BulkOperation, ContentTag, ContentCategory, SearchIndex, ContentStatistics, DataExportTask
+from .integration import APIKey, Webhook, WebhookDelivery, Integration, APIEndpoint, APIUsageLog, IntegrationTemplate, APIDocumentation
 from .content import ContentModerationRule, ContentModerationLog, BulkOperation, ContentTag, ContentCategory, SearchIndex, ContentStatistics, DataExportTask
 from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSecuritySettings
 from .enums import PermissionType, TrainingStatus
