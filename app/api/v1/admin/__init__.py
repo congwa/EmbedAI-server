@@ -11,6 +11,7 @@ from .health import router as health_router  # 健康监控
 from .rbac import router as rbac_router  # 角色权限管理
 from .config import router as config_router  # 系统配置管理
 from .security import router as security_router  # 安全管理
+from .content import router as content_router  # 内容管理
 
 # 创建管理端总路由
 router = APIRouter()
@@ -41,3 +42,6 @@ router.include_router(config_router, prefix="/config", tags=["admin-config"])
 
 # 安全管理
 router.include_router(security_router, prefix="/security", tags=["admin-security"])
+
+# 内容管理
+router.include_router(content_router, prefix="/content", tags=["admin-content"])
