@@ -87,12 +87,16 @@ app.add_middleware(
 # 添加链路追踪中间件 - 必须在最外层，最先执行
 app.add_middleware(TraceMiddleware)
 
+# 添加分析中间件 - 在链路追踪之后，用于收集分析数据
+from app.middleware.analytics_middleware import AnalyticsMiddleware
+app.add_middleware(AnalyticsMiddleware)
+
 # 添加RAG日志中间件 - 在链路追踪之后，其他中间件之前
 app.add_middleware(RAGLoggingMiddleware)
 
 # 添加上下文中间件
 app.add_middleware(ContextMiddleware)
- 
+
 # 添加日志中间件
 app.add_middleware(LoggingMiddleware)
 
