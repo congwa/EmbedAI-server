@@ -12,6 +12,7 @@ from .analytics import SystemMetrics, UserActivityLog, KnowledgeBaseMetrics, API
 from .health import ServiceHealth, SystemAlert, PerformanceThreshold, HealthCheckConfig, UptimeRecord
 from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSecuritySettings
 from .config import SystemConfig, ConfigChangeLog, ConfigTemplate, ConfigBackup, EnvironmentVariable, ConfigValidationRule
+from .security import TwoFactorAuth, UserSession, IPWhitelist, IPBlacklist, SecurityEvent, PasswordHistory, DeviceFingerprint, SecurityPolicy
 from .rbac import Permission, Role, UserGroup, UserSession, UserLoginLog, UserSecuritySettings
 from .enums import PermissionType, TrainingStatus
 from .associations import knowledge_base_users

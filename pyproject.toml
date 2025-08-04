@@ -30,6 +30,8 @@ aiosqlite = "^0.21.0"
 alembic = "^1.14.1"
 aioredis = "^2.0.1"
 unstructured = {version = "^0.15.0", extras = ["pptx", "csv"]}
+pyotp = "^2.9.0"
+qrcode = {extras = ["pil"], version = "^8.2"}
 
 
 [tool.poetry.group.dev.dependencies]
