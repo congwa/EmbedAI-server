@@ -1,204 +1,350 @@
-# EmbedAI-server
+# EmbedAI Server - 智能知识库助手系统
 
-随处可用的智能知识助手系统，基于图数据库和大语言模型，提供高性能的知识检索和智能问答服务。
+企业级AI知识管理与服务系统，基于图数据库和大型语言模型，提供高性能的知识检索、智能问答和知识管理功能。
 
-## 配套项目
+## 🌟 核心特性
 
-- [EmbedAI-sdk h5端sdk](./frontend/sdk/)
-- [EmbedAI-admin 后台管理端](./frontend/admin/)
-- [EmbedAI-server 服务端](https://github.com/congwa/EmbedAI-server)
+### 📊 多租户知识管理
+- **知识库隔离**：每个用户可创建和管理多个独立知识库
+- **权限控制**：细粒度的用户权限管理（读/写/管理/所有者）
+- **多用户协作**：支持知识库多用户共享与协作
 
-## 功能特性
+### 🤖 先进AI技术
+- **图数据库+向量数据库**：结合Neo4j图数据库和向量数据库
+- **智能实体识别**：基于LLM的实体抽取和关系分析
+- **多跳查询**：支持复杂关系的图遍历检索
+- **重排序优化**：使用重排序模型提升结果准确性
 
-- **轻松植入**：提供多语言SDK和完整API，支持快速接入任何系统
-- **智能问答**：基于大语言模型和图数据库的知识检索，提供准确的问答服务
-- **知识库隔离**：为每个接入系统提供独立的知识库空间，确保数据安全和隔离
-- **高效文档管理**：支持多种文档类型的管理，包括创建、更新、查询和软删除
-- **权限控制**：完善的访问权限管理，支持多租户和多角色
+### 📁 多格式文档处理
+- **丰富文档类型**：PDF、Word、Excel、TXT、Markdown、HTML
+- **智能分段**：基于语义的内容分块和重叠处理
+- **元数据提取**：自动提取文档标题、关键词等元数据
+- **OCR支持**：图片和扫描文档的文字识别
 
-## 技术优势
+### 💬 智能问答系统
+- **上下文问答**：基于整个知识库的智能回复
+- **实时对话**：WebSocket支持的实时聊天
+- **成本计算**：精确的Token使用和费用计算
+- **防刷机制**：完善的访问频率控制和防滥用保护
 
-- 极简接入方案
-  - 完整的RESTful API支持，支持任意系统快速集成
-  - 支持Docker一键部署，简化运维成本
+## 🏗️ 技术架构
 
-- 基于图数据库的知识存储
-  - 相比传统关系型数据库，图数据库能更自然地表达实体间的复杂关系
-  - 支持高效的图遍历算法，显著提升多跳关系查询性能
-  - 灵活的图模型设计，便于动态扩展知识结构
-  - 强大的关系分析能力，支持知识推理和关联发现
-
-- AI问答处理流程
-  - 智能实体识别：区分命名实体和通用实体，通过向量编码实现精准匹配
-  - 多层次评分机制：
-    - 实体评分：基于向量相似度，对命名实体和通用实体采用差异化评分策略
-    - 图结构评分：利用图结构信息重新评估实体重要性，考虑实体间关系强度
-    - 关系评分：基于实体分数评估关系重要性，使用实体到关系的映射矩阵
-    - 文本块评分：通过关系找到相关文本块，确保上下文完整性
-  - 确保查询理解准确性和结果相关性
-
-- 企业级特性
-  - 多租户隔离机制
-  - 访问控制策略
-  - 文档的软删除机制
-  - 知识库训练队列管理
-
-## 用户和知识库的关系
-
-```sh
-User (用户)
-├── owned_knowledge_bases (拥有的知识库，一对多)
-│   └── KnowledgeBase.owner_id 引用 User.id
-│
-└── knowledge_bases (参与的知识库，多对多)
-    └── knowledge_base_users (关联表)
-        ├── user_id 引用 User.id
-        ├── knowledge_base_id 引用 KnowledgeBase.id
-        ├── permission (权限)
-        └── created_at (加入时间)
-
-KnowledgeBase (知识库)
-├── owner (所有者，多对一)
-│   └── owner_id 引用 User.id
-│
-└── users (成员，多对多)
-    └── knowledge_base_users (关联表)
-        ├── knowledge_base_id 引用 KnowledgeBase.id
-        ├── user_id 引用 User.id
-        ├── permission (权限)
-        └── created_at (加入时间)
+### 系统架构
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   FastAPI       │    │   Redis/Queue    │    │   Neo4j         │
+│   API Server    │───→│   Async Tasks    │───→│   Graph DB      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                      │                      │
+         ↓                      ↓                      ↓
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   PostgreSQL    │    │   LLM Service    │    │   Vector Search │
+│   Metadata      │    │   SiliconFlow    │    │   Embedding     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
-## 数据库关系
+### 数据处理流程
+1. **文档上传** → 解析文档内容
+2. **内容分块** → 语义分段处理
+3. **向量化** → 生成嵌入向量
+4. **实体识别** → 提取实体和关系
+5. **图存储** → 存储到Neo4j图数据库
+6. **知识检索** → 图遍历+向量检索
+7. **智能回答** → LLM生成回复
 
-[![关系图](https://mermaid.ink/img/pako:eNqNVMuumzAQ_RXL6yQKuYQEltVVN3dTqeqmimQ5eEJcwKa2aS4l-fcOIQ9eleKN7TmH8fjMMTWNtQAaUTDvkieG5ztFcPywYMj5PJ_rul1HZEdjA9yB3dEh50w-lD5lIBL4wi1cyfqkJpg1eddxmYNyUxn7WSY_0Mpx2Wbu5K7bdTMkMqUg3z6eIeuMVAmBnMtsFD1yewTBCm7tSRvxxPdaZ8AVkZZxkUs1jcRO_oFRUitSlkI1jgPe2PWhpuBWB8H2FcPav3ZqFxh3MocHhbsWvNwF6Iv2khKK59DnYbfADM--sYVG4TrX_2W1IvDJ8yID9rsEI7GDA1Q56SrmqmIEZVnOsIsHmYwOQv1TnJmQ5omBKnPiDFbQQNZxV9oJeboM09VpmnXA6dr3Lu1WxoMExmgzkQXvXE514uHUl5qACmVj5zQGxxSD-wsdX8V8wRc9sCzECOy4V0AGCPerTe9-Yns01NAT_3frhc5oDga9IvB_cpVgR90R0Gq0ebqCm7R5tg2Pl05_r1RMI2dKmFGjy-RIowPPLO7aqm__ozul4Oqn1t0tjWr6SaO5768X3nLle6HvvS3Dt3BGKxr5m-1itQ62AQLbYO1t_MuM_r1m8BZeEIThcu35_irYbvzV5R_K2pLI?type=png)](https://mermaid.live/edit#pako:eNqNVMuumzAQ_RXL6yQKuYQEltVVN3dTqeqmimQ5eEJcwKa2aS4l-fcOIQ9eleKN7TmH8fjMMTWNtQAaUTDvkieG5ztFcPywYMj5PJ_rul1HZEdjA9yB3dEh50w-lD5lIBL4wi1cyfqkJpg1eddxmYNyUxn7WSY_0Mpx2Wbu5K7bdTMkMqUg3z6eIeuMVAmBnMtsFD1yewTBCm7tSRvxxPdaZ8AVkZZxkUs1jcRO_oFRUitSlkI1jgPe2PWhpuBWB8H2FcPav3ZqFxh3MocHhbsWvNwF6Iv2khKK59DnYbfADM--sYVG4TrX_2W1IvDJ8yID9rsEI7GDA1Q56SrmqmIEZVnOsIsHmYwOQv1TnJmQ5omBKnPiDFbQQNZxV9oJeboM09VpmnXA6dr3Lu1WxoMExmgzkQXvXE514uHUl5qACmVj5zQGxxSD-wsdX8V8wRc9sCzECOy4V0AGCPerTe9-Yns01NAT_3frhc5oDga9IvB_cpVgR90R0Gq0ebqCm7R5tg2Pl05_r1RMI2dKmFGjy-RIowPPLO7aqm__ozul4Oqn1t0tjWr6SaO5768X3nLle6HvvS3Dt3BGKxr5m-1itQ62AQLbYO1t_MuM_r1m8BZeEIThcu35_irYbvzV5R_K2pLI)
+## 🚀 快速开始
 
-## TODO LIST
+### 环境要求
+- Python 3.10+
+- PostgreSQL
+- Redis
+- Neo4j
 
-### sdk
+### 本地开发
 
-- [ ] web SDK
+#### 1. 环境配置
+```bash
+# 克隆项目
+git clone https://github.com/congwa/EmbedAI-server.git
+cd EmbedAI-server
 
-### 后台管理
+# 创建虚拟环境
+poetry install
 
-- [ ] 后台管理页面
-  
-### 服务器功能
+# 激活环境
+poetry shell
+```
 
-- [x] 用户管理
-  - [x] 用户注册与普通用户管理
-  - [ ] 用户多知识库管理
-    - [x] 用户创建多知识库
-    - [x] 知识库管理
-    - [x] 普通用户权限管理
+#### 2. 环境变量配置
+```bash
+# 复制配置文件
+cp .env.example .env
 
-- [ ] 客服
-  - [ ] 客服与用户聊天 (进行中)
-  - [ ] 聊天记录管理（进行中）
+# 编辑配置vim .env
+DATABASE_URL=postgresql://user:password@localhost/embedai
+REDIS_HOST=localhost
+REDIS_PORT=6379
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+ZHIPU_API_KEY=your_api_key
+```
 
-- [x] 文档库
-  - [x] 文档的创建、更新、查询和软删除
-  - [ ] 多种文档类型支持
-    - [x] 文本
-    - [ ] 图片
-    - [ ] pdf
-    - [ ] 网页
-  - [x] 文档列表分页查询
+#### 3. 数据库初始化
+```bash
+# 创建数据库表
+alembic upgrade head
 
-- [ ] langchain现有工具使用
-  
-- [x] 知识库管理
-  - [x] 知识库创建与配置
-  - [x] 知识库训练队列管理
-  - [x] 基于图数据库的知识存储
-  - [x] 智能实体识别和关系分析
-  - [ ] 多ai模型配置配置
-  - [ ] token计算
-  - [ ] 分析
-- 
-- [ ] 知识库查询
-  - [x] 基于图数据库的多跳关系查询
-  - [x] 基于大语言模型的智能问答
-  - [x] 防止盗刷
-  - [ ] 上下文信息的传递与更新
-  - [ ] 提示词配置与组合
-  - [ ] 访问控制
+# 创建默认管理员
+python scripts/create_admin.py --username admin --password admin123
+```
 
-- [ ] 系统特性  - [x] 基于FastAPI的高性能异步处理
-  - [ ] Docker一键部署支持
+#### 4. 启动服务
+```bash
+# 开发模式（热重载）
+poetry run python main.py
 
+# 或使用uvicorn
+poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
 
+### Docker部署
 
-## 查询过程
+#### 1. 快速部署
+```bash
+# 启动所有服务
+docker-compose up -d
 
-让我为您详细解释每个步骤的作用和原因：
+# 查看日志
+docker-compose logs -f
+```
 
-1. 生成查询嵌入
+#### 2. 自定义部署
+```bash
+# 构建镜像
+docker build -t embedai-server .
 
-- 作用：将文本转换为向量表示
-- 原因：
-  * 便于在向量空间中进行相似度计算
-  * 区分处理命名实体和通用实体，通过添加[NONE]前缀来区分实体类型
-  * 将查询文本也转换为向量，实现统一的相似度计算
+# 运行容器
+docker run -d \
+  --name embedai-server \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql://... \
+  -e NEO4J_URI=bolt://... \
+  -e ZHIPU_API_KEY=your_key \
+  embedai-server
+```
 
-2. 向量数据库评分
+### API文档
+启动服务后访问：
+- Swagger文档: http://localhost:8000/docs
+- ReDoc文档: http://localhost:8000/redoc
 
-- 作用：基于向量相似度为实体打分
-- 原因：
-  * 命名实体使用严格匹配（top_k=1），因为命名实体需要精确匹配
-  * 通用实体使用模糊匹配（top_k=20），允许更多相关实体的召回
-  * 使用不同的阈值控制匹配质量
+## 📚 API使用指南
 
-3. 实体评分合并
+### 认证流程
+```bash
+# 1. 用户注册
+POST /api/v1/auth/register
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "username": "testuser"
+}
 
-- 作用：整合不同来源的实体评分
-- 原因：
-  * 使用max操作选择最高分，确保最相关的匹配被保留
-  * 统一评分标准，便于后续处理
+# 2. 用户登录
+POST /api/v1/auth/login
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
 
-4. 图结构评分
+# 3. 使用token
+Authorization: Bearer <jwt_token>
+```
 
-- 作用：利用图结构信息进行二次评分
-- 原因：
-  * 考虑实体间的关系网络
-  * 利用图的结构特征提升评分的准确性
-  * 补充纯向量相似度无法捕捉的结构信息
+### 知识库管理
+```bash
+# 创建知识库
+POST /api/v1/knowledge-bases
+{
+  "name": "公司制度",
+  "description": "公司内部管理制度"
+}
 
-5. 实体检索
+# 上传文档
+POST /api/v1/knowledge-bases/{id}/documents
+# 支持文件: PDF, DOCX, XLSX, TXT, MD, HTML
+```
 
-- 作用：根据最终评分提取相关实体
-- 原因：
-  * 使用排序后的评分确保获取最相关的实体
-  * 异步获取实体信息提高效率
-  * 过滤无效实体，确保结果质量
+### 智能问答
+```bash
+# REST API问答
+POST /api/v1/chat/completions
+{
+  "knowledge_base_id": "uuid",
+  "messages": [
+    {"role": "user", "content": "公司的请假流程是什么？"}
+  ]
+}
 
-6. 关系检索
+# WebSocket实时对话
+ws://localhost:8000/ws/chat/{knowledge_base_id}
+```
 
-- 作用：基于已选实体提取相关关系
-- 原因：
-  * 利用实体评分传导到关系层面
-  * 确保关系的两端实体都具有较高相关性
-  * 构建实体间的语义连接
+## 🧪 开发指南
 
-7. 文档块检索
+### 项目结构
+```
+EmbedAI-server/
+├── app/
+│   ├── api/v1/          # API路由
+│   ├── core/            # 核心配置
+│   ├── models/          # 数据库模型
+│   ├── schemas/         # 数据验证
+│   └── services/        # 业务逻辑
+├── _rag/                # RAG引擎
+│   ├── retrieval/       # 检索模块
+│   ├── extractor/       # 文档提取
+│   └── docstore/        # 文档存储
+├── main.py              # 应用入口
+├── pyproject.toml       # 依赖配置
+└── alembic/             # 数据库迁移
+```
 
-- 作用：获取支持关系的原始文本证据
-- 原因：
-  * 提供关系的上下文支持
-  * 通过文档块回溯到原始信息
-  * 为最终答案生成提供证据支持
+### 开发工具
 
-8. 上下文构建
+#### 代码质量
+```bash
+# 代码检查
+poetry run flake8 app/
 
-- 作用：组织检索到的所有信息
-- 原因：
-  * 将实体、关系、文档块统一组织
-  * 提供结构化的上下文信息
-  * 便于后续的答案生成
+# 类型检查  
+poetry run mypy app/
 
-这种层层递进的设计体现了：
+# 安全扫描
+poetry run bandit -r app/
+```
 
-1. 从表层到深层的信息提取过程
-2. 多维度的相关性评估机制
-3. 完整的知识图谱利用策略
-4. 高效的异步处理机制
+#### 测试
+```bash
+# 运行所有测试
+poetry run pytest
+
+# 运行特定测试
+poetry run pytest tests/test_knowledge_base.py -v
+
+# 带覆盖率测试
+poetry run pytest --cov=app --cov-report=html
+```
+
+#### 数据库迁移
+```bash
+# 创建迁移
+alembic revision --autogenerate -m "add user table"
+
+# 运行迁移
+alembic upgrade head
+
+# 回滚迁移
+alembic downgrade -1
+```
+
+### 模型配置
+
+#### 支持的LLM服务
+- **SiliconFlow** (默认): 免费额度充足，支持Qwen系列模型
+- **OpenAI**: GPT-3.5, GPT-4等
+- **Zhipu**: 中文优化，适合国内使用
+
+#### 配置示例
+```python
+# 修改 app/core/config.py
+DEFAULT_LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_API_BASE = "https://api.siliconflow.cn/v1"
+DEFAULT_API_KEY = "sk-xxx"
+```
+
+## 📊 性能优化
+
+### 缓存策略
+- **Redis**: 缓存常用查询结果
+- **向量缓存**: 避免重复向量化处理
+- **知识图谱**: Neo4j查询结果缓存
+
+### 扩展建议
+- **水平扩展**: 使用负载均衡部署多台实例
+- **数据库分片**: 按知识库或用户分片
+- **缓存预热**: 预加载热门数据
+
+## 🔄 配套项目
+
+### SDK和前端
+- **[EmbedAI-sdk H5端sdk](./frontend/sdk/)**: 移动端SDK，快速集成到移动应用
+- **[EmbedAI-admin 后台管理端](./frontend/admin/)**: 管理后台，监控和配置管理
+
+### 客户端示例
+```javascript
+// JavaScript SDK示例
+const sdk = new EmbedAI({
+  baseURL: 'http://localhost:8000',
+  token: 'your_jwt_token'
+});
+
+// 获取知识库列表
+await sdk.getKnowledgeBases();
+
+// 上传文档并训练
+await sdk.uploadDocument(kbId, file);
+
+// 智能问答
+await sdk.chat(kbId, '问题内容');
+```
+
+## 🛠️ 故障排除
+
+### 常见问题
+
+#### 1. 数据库连接失败
+```bash
+# 检查数据库状态
+systemctl status postgres
+
+# 检查配置连接字符串
+python -c "from sqlalchemy import create_engine; print(create_engine('你的数据库URL').connect())"
+```
+
+#### 2. Neo4j连接问题
+```bash
+# 检查Neo4j状态
+curl -H "Accept: application/json" -H "Content-Type: application/json" \
+  -u "neo4j:password" \
+  http://localhost:7474/db/data/
+```
+
+#### 3. Redis连接问题
+```bash
+# 检查Redis连接
+redis-cli ping
+# 应返回 PONG
+```
+
+#### 4. 模型调用失败
+```bash
+# 检查API密钥
+curl -H "Authorization: Bearer your_key" \
+  https://api.siliconflow.cn/v1/models
+```
+
+## 📄 License
+
+本项目采用 MIT License - 查看 [LICENSE](LICENSE) 文件了解详情
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📞 支持
+
+- 📧 Email: cong_wa@163.com
+- 📦 GitHub Issues: [项目Issues](https://github.com/congwa/EmbedAI-server/issues)
+- 💬 讨论区: [项目Discussions](https://github.com/congwa/EmbedAI-server/discussions)
