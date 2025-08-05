@@ -111,8 +111,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 from app.api.v1.ws import router as ws_router
 app.include_router(ws_router, prefix='/ws')
 
-async def start_monitoring_connections():
-    await connection_manager.monitor_connections()
+# start_monitoring_connections 函数已在 app.core.ws 中定义，这里不需要重复定义
 
 # 3. 修改 uvicorn.run 的调用方式
 if __name__ == "__main__":
