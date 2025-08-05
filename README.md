@@ -4,8 +4,8 @@
 
 ## 配套项目
 
-- [EmbedAI-sdk h5端sdk](https://github.com/congwa/EmbedAI-sdk)
-- [EmbedAI-admin 后台管理端](https://github.com/congwa/EmbedAI-admin)
+- [EmbedAI-sdk h5端sdk](./frontend/sdk/)
+- [EmbedAI-admin 后台管理端](./frontend/admin/)
 - [EmbedAI-server 服务端](https://github.com/congwa/EmbedAI-server)
 
 ## 功能特性
