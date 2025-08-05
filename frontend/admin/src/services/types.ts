@@ -535,3 +535,800 @@ export interface MembersResponse extends WebSocketMessage {
     count: number;
   };
 }
+
+// 分析报告相关类型
+
+// 仪表板数据
+export interface DashboardData {
+  overview: {
+    total_users: number
+    active_users: number
+    total_knowledge_bases: number
+    total_documents: number
+    total_queries: number
+    system_uptime: number
+  }
+  recent_activities: Array<{
+    user_id: number
+    user_email: string
+    activity_type: string
+    activity_details: Record<string, any>
+    timestamp: string
+  }>
+  top_knowledge_bases: Array<{
+    id: number
+    name: string
+    domain: string
+    document_count: number
+    query_count: number
+    last_updated: string
+  }>
+  performance_trends: {
+    dates: string[]
+    response_times: number[]
+    query_counts: number[]
+    error_rates: number[]
+  }
+  cost_summary: {
+    current_month: {
+      total_cost: number
+      llm_cost: number
+      storage_cost: number
+      api_cost: number
+    }
+    previous_month: {
+      total_cost: number
+      growth_rate: number
+    }
+  }
+}
+
+// 系统概览
+export interface SystemOverview {
+  period: string
+  total_users: number
+  new_users: number
+  active_users: number
+  total_knowledge_bases: number
+  new_knowledge_bases: number
+  total_documents: number
+  new_documents: number
+  total_queries: number
+  successful_queries: number
+  failed_queries: number
+  average_response_time: number
+  system_uptime: number
+  storage_used: string
+  bandwidth_used: string
+}
+
+// 用户活动统计查询参数
+export interface UserActivityStatsQuery {
+  start_date?: string
+  end_date?: string
+  user_id?: number
+  activity_type?: string
+  limit?: number
+}
+
+// 用户活动统计
+export interface UserActivityStats {
+  period: {
+    start_date: string
+    end_date: string
+  }
+  summary: {
+    total_activities: number
+    unique_users: number
+    most_active_user: {
+      user_id: number
+      email: string
+      activity_count: number
+    }
+  }
+  activity_breakdown: Record<string, number>
+  daily_trends: Array<{
+    date: string
+    total_activities: number
+    unique_users: number
+  }>
+  recent_activities: Array<{
+    id: number
+    user_id: number
+    user_email: string
+    activity_type: string
+    activity_details: Record<string, any>
+    ip_address: string
+    user_agent: string
+    timestamp: string
+    duration: number
+  }>
+}
+
+// 知识库统计查询参数
+export interface KnowledgeBaseStatsQuery {
+  period?: string
+  sort_by?: string
+  limit?: number
+}
+
+// 知识库统计
+export interface KnowledgeBaseStats {
+  period: string
+  summary: {
+    total_knowledge_bases: number
+    active_knowledge_bases: number
+    total_documents: number
+    total_queries: number
+    average_accuracy: number
+  }
+  top_knowledge_bases: Array<{
+    id: number
+    name: string
+    domain: string
+    document_count: number
+    total_size: string
+    query_count: number
+    successful_queries: number
+    failed_queries: number
+    accuracy_rate: number
+    average_response_time: number
+    last_updated: string
+    created_at: string
+  }>
+  usage_trends: {
+    dates: string[]
+    query_counts: number[]
+    accuracy_rates: number[]
+  }
+}
+
+// 性能指标查询参数
+export interface PerformanceMetricsQuery {
+  start_date?: string
+  end_date?: string
+  metric_type?: string
+  granularity?: string
+}
+
+// 性能指标
+export interface PerformanceMetrics {
+  period: {
+    start_date: string
+    end_date: string
+    granularity: string
+  }
+  summary: {
+    average_response_time: number
+    max_response_time: number
+    min_response_time: number
+    total_requests: number
+    successful_requests: number
+    error_rate: number
+    uptime_percentage: number
+  }
+  metrics: Array<{
+    timestamp: string
+    response_time: number
+    request_count: number
+    error_count: number
+    cpu_usage: number
+    memory_usage: number
+    disk_usage: number
+  }>
+  alerts: Array<{
+    timestamp: string
+    type: string
+    value: number
+    threshold: number
+    severity: string
+  }>
+}
+
+// 成本分析查询参数
+export interface CostAnalysisQuery {
+  start_date?: string
+  end_date?: string
+  breakdown?: string
+}
+
+// 成本分析
+export interface CostAnalysis {
+  period: {
+    start_date: string
+    end_date: string
+  }
+  total_cost: number
+  cost_breakdown: {
+    llm_api: {
+      cost: number
+      percentage: number
+      requests: number
+      cost_per_request: number
+    }
+    storage: {
+      cost: number
+      percentage: number
+      storage_gb: number
+      cost_per_gb: number
+    }
+    compute: {
+      cost: number
+      percentage: number
+      hours: number
+      cost_per_hour: number
+    }
+    bandwidth: {
+      cost: number
+      percentage: number
+      gb_transferred: number
+      cost_per_gb: number
+    }
+  }
+  daily_costs: Array<{
+    date: string
+    total_cost: number
+    llm_cost: number
+    storage_cost: number
+    compute_cost: number
+    bandwidth_cost: number
+  }>
+  projections: {
+    monthly_estimate: number
+    yearly_estimate: number
+    growth_rate: number
+  }
+}
+
+// 导出分析数据请求
+export interface ExportAnalyticsRequest {
+  data_type: 'user_activity' | 'knowledge_bases' | 'performance' | 'cost'
+  format?: 'csv' | 'excel'
+  start_date?: string
+  end_date?: string
+  filters?: Record<string, any>
+}
+
+// 系统健康监控相关类型
+
+// 系统健康状态
+export interface SystemHealth {
+  status: 'healthy' | 'warning' | 'critical'
+  timestamp: string
+  uptime: number
+  version: string
+  services: {
+    database: ServiceHealthStatus
+    redis: ServiceHealthStatus
+    storage: ServiceHealthStatus
+    llm_api: ServiceHealthStatus
+  }
+  system_info: {
+    cpu_usage: number
+    memory_usage: number
+    disk_usage: number
+    network_io: {
+      bytes_sent: number
+      bytes_received: number
+    }
+  }
+  recent_errors: Array<{
+    timestamp: string
+    level: string
+    message: string
+    source: string
+  }>
+}
+
+// 服务健康状态
+export interface ServiceHealthStatus {
+  status: 'healthy' | 'warning' | 'critical' | 'unknown'
+  response_time: number
+  last_check: string
+  error_message?: string
+}
+
+// 系统指标查询参数
+export interface SystemMetricsQuery {
+  start_time?: string
+  end_time?: string
+  granularity?: 'minute' | 'hour' | 'day'
+  metrics?: string[]
+}
+
+// 系统指标
+export interface SystemMetrics {
+  period: {
+    start_time: string
+    end_time: string
+    granularity: string
+  }
+  metrics: Array<{
+    timestamp: string
+    cpu_usage: number
+    memory_usage: number
+    disk_usage: number
+    network_io: {
+      bytes_sent: number
+      bytes_received: number
+    }
+    active_connections: number
+    request_count: number
+    response_time: number
+    error_count: number
+  }>
+  summary: {
+    avg_cpu_usage: number
+    max_cpu_usage: number
+    avg_memory_usage: number
+    max_memory_usage: number
+    avg_response_time: number
+    max_response_time: number
+    total_requests: number
+    total_errors: number
+    error_rate: number
+  }
+}
+
+// 服务状态
+export interface ServiceStatus {
+  name: string
+  status: 'running' | 'stopped' | 'error' | 'unknown'
+  version: string
+  uptime: number
+  health_check_url?: string
+  last_health_check: string
+  response_time: number
+  error_message?: string
+  dependencies: Array<{
+    name: string
+    status: 'healthy' | 'unhealthy'
+    response_time: number
+  }>
+  metrics: {
+    cpu_usage: number
+    memory_usage: number
+    request_count: number
+    error_count: number
+  }
+}
+
+// 性能监控查询参数
+export interface PerformanceMonitoringQuery {
+  start_time?: string
+  end_time?: string
+  service?: string
+  metric_type?: string
+}
+
+// 性能监控数据
+export interface PerformanceMonitoring {
+  period: {
+    start_time: string
+    end_time: string
+  }
+  services: Array<{
+    name: string
+    status: 'healthy' | 'warning' | 'critical'
+    metrics: {
+      response_time: {
+        current: number
+        average: number
+        p95: number
+        p99: number
+      }
+      throughput: {
+        requests_per_second: number
+        peak_rps: number
+      }
+      error_rate: {
+        current: number
+        average: number
+      }
+      resource_usage: {
+        cpu: number
+        memory: number
+        disk: number
+      }
+    }
+    alerts: Array<{
+      type: string
+      severity: 'low' | 'medium' | 'high' | 'critical'
+      message: string
+      timestamp: string
+    }>
+  }>
+  trends: {
+    timestamps: string[]
+    response_times: number[]
+    throughput: number[]
+    error_rates: number[]
+    cpu_usage: number[]
+    memory_usage: number[]
+  }
+}
+
+// 告警查询参数
+export interface AlertsQuery {
+  page?: number
+  page_size?: number
+  status?: 'active' | 'resolved' | 'acknowledged'
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  service?: string
+  start_time?: string
+  end_time?: string
+}
+
+// 告警
+export interface Alert {
+  id: number
+  name: string
+  description: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  status: 'active' | 'resolved' | 'acknowledged'
+  service: string
+  metric: string
+  condition: string
+  threshold: number
+  current_value: number
+  triggered_at: string
+  resolved_at?: string
+  acknowledged_at?: string
+  acknowledged_by?: string
+  rule_id: number
+  tags: string[]
+  metadata: Record<string, any>
+}
+
+// 创建告警请求
+export interface CreateAlertRequest {
+  name: string
+  description: string
+  service: string
+  metric: string
+  condition: 'greater_than' | 'less_than' | 'equals' | 'not_equals'
+  threshold: number
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  enabled: boolean
+  tags?: string[]
+  notification_channels?: string[]
+}
+
+// 更新告警请求
+export interface UpdateAlertRequest {
+  name?: string
+  description?: string
+  condition?: 'greater_than' | 'less_than' | 'equals' | 'not_equals'
+  threshold?: number
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  enabled?: boolean
+  tags?: string[]
+  notification_channels?: string[]
+}
+
+// 告警阈值配置
+export interface AlertThresholds {
+  cpu_usage: {
+    warning: number
+    critical: number
+  }
+  memory_usage: {
+    warning: number
+    critical: number
+  }
+  disk_usage: {
+    warning: number
+    critical: number
+  }
+  response_time: {
+    warning: number
+    critical: number
+  }
+  error_rate: {
+    warning: number
+    critical: number
+  }
+  uptime: {
+    warning: number
+    critical: number
+  }
+}
+
+// 更新告警阈值请求
+export interface UpdateAlertThresholdsRequest {
+  cpu_usage?: {
+    warning: number
+    critical: number
+  }
+  memory_usage?: {
+    warning: number
+    critical: number
+  }
+  disk_usage?: {
+    warning: number
+    critical: number
+  }
+  response_time?: {
+    warning: number
+    critical: number
+  }
+  error_rate?: {
+    warning: number
+    critical: number
+  }
+  uptime?: {
+    warning: number
+    critical: number
+  }
+}
+
+// 运行时间查询参数
+export interface UptimeQuery {
+  start_date?: string
+  end_date?: string
+  service?: string
+}
+
+// 运行时间记录
+export interface UptimeRecord {
+  date: string
+  service: string
+  uptime_percentage: number
+  total_downtime_minutes: number
+  incidents: Array<{
+    start_time: string
+    end_time: string
+    duration_minutes: number
+    reason: string
+    severity: string
+  }>
+}
+
+// 安全管理相关类型
+
+// IP列表查询参数
+export interface IpListQuery {
+  page?: number
+  page_size?: number
+  ip_address?: string
+  status?: 'active' | 'inactive'
+  created_by?: number
+}
+
+// IP白名单条目
+export interface IpWhitelistEntry {
+  id: number
+  ip_address: string
+  description: string
+  status: 'active' | 'inactive'
+  created_by: number
+  created_by_email: string
+  created_at: string
+  updated_at: string
+  last_accessed?: string
+  access_count: number
+}
+
+// 创建IP白名单请求
+export interface CreateIpWhitelistRequest {
+  ip_address: string
+  description: string
+  status?: 'active' | 'inactive'
+}
+
+// 更新IP白名单请求
+export interface UpdateIpWhitelistRequest {
+  ip_address?: string
+  description?: string
+  status?: 'active' | 'inactive'
+}
+
+// IP黑名单条目
+export interface IpBlacklistEntry {
+  id: number
+  ip_address: string
+  reason: string
+  status: 'active' | 'inactive'
+  blocked_at: string
+  blocked_by: number
+  blocked_by_email: string
+  created_at: string
+  updated_at: string
+  block_count: number
+  last_blocked?: string
+}
+
+// 创建IP黑名单请求
+export interface CreateIpBlacklistRequest {
+  ip_address: string
+  reason: string
+  status?: 'active' | 'inactive'
+}
+
+// 更新IP黑名单请求
+export interface UpdateIpBlacklistRequest {
+  ip_address?: string
+  reason?: string
+  status?: 'active' | 'inactive'
+}
+
+// 安全事件查询参数
+export interface SecurityEventsQuery {
+  page?: number
+  page_size?: number
+  event_type?: string
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  start_time?: string
+  end_time?: string
+  user_id?: number
+  ip_address?: string
+}
+
+// 安全事件
+export interface SecurityEvent {
+  id: number
+  event_type: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  description: string
+  user_id?: number
+  user_email?: string
+  ip_address: string
+  user_agent: string
+  location?: {
+    country: string
+    city: string
+    latitude: number
+    longitude: number
+  }
+  metadata: Record<string, any>
+  timestamp: string
+  resolved: boolean
+  resolved_at?: string
+  resolved_by?: number
+  resolved_by_email?: string
+}
+
+// 双因子认证设置
+export interface TwoFactorAuthSettings {
+  enabled: boolean
+  method: 'totp' | 'sms' | 'email'
+  backup_codes_count: number
+  last_used?: string
+  setup_at?: string
+}
+
+// 启用双因子认证请求
+export interface Enable2FARequest {
+  method: 'totp' | 'sms' | 'email'
+  phone_number?: string
+  email?: string
+}
+
+// 双因子认证响应
+export interface TwoFactorAuthResponse {
+  secret: string
+  qr_code: string
+  backup_codes: string[]
+}
+
+// 禁用双因子认证请求
+export interface Disable2FARequest {
+  password: string
+  verification_code: string
+}
+
+// 验证双因子认证请求
+export interface Verify2FARequest {
+  verification_code: string
+}
+
+// 密码策略
+export interface PasswordPolicy {
+  min_length: number
+  require_uppercase: boolean
+  require_lowercase: boolean
+  require_numbers: boolean
+  require_special_chars: boolean
+  max_age_days: number
+  history_count: number
+  lockout_attempts: number
+  lockout_duration_minutes: number
+  complexity_score: number
+}
+
+// 更新密码策略请求
+export interface UpdatePasswordPolicyRequest {
+  min_length?: number
+  require_uppercase?: boolean
+  require_lowercase?: boolean
+  require_numbers?: boolean
+  require_special_chars?: boolean
+  max_age_days?: number
+  history_count?: number
+  lockout_attempts?: number
+  lockout_duration_minutes?: number
+  complexity_score?: number
+}
+
+// 设备指纹查询参数
+export interface DeviceFingerprintsQuery {
+  page?: number
+  page_size?: number
+  user_id?: number
+  device_type?: string
+  status?: 'trusted' | 'suspicious' | 'blocked'
+}
+
+// 设备指纹
+export interface DeviceFingerprint {
+  id: number
+  user_id: number
+  user_email: string
+  device_id: string
+  device_type: string
+  browser: string
+  os: string
+  screen_resolution: string
+  timezone: string
+  language: string
+  ip_address: string
+  location?: {
+    country: string
+    city: string
+  }
+  status: 'trusted' | 'suspicious' | 'blocked'
+  first_seen: string
+  last_seen: string
+  access_count: number
+  risk_score: number
+}
+
+// 安全审计查询参数
+export interface SecurityAuditQuery {
+  start_date?: string
+  end_date?: string
+  audit_type?: string
+}
+
+// 安全审计报告
+export interface SecurityAuditReport {
+  period: {
+    start_date: string
+    end_date: string
+  }
+  summary: {
+    total_events: number
+    high_risk_events: number
+    blocked_attempts: number
+    successful_logins: number
+    failed_logins: number
+    unique_ips: number
+    new_devices: number
+  }
+  risk_analysis: {
+    overall_risk_level: 'low' | 'medium' | 'high' | 'critical'
+    risk_factors: Array<{
+      factor: string
+      score: number
+      description: string
+    }>
+    recommendations: string[]
+  }
+  event_breakdown: Record<string, number>
+  geographic_distribution: Array<{
+    country: string
+    event_count: number
+    risk_level: string
+  }>
+  time_series: {
+    timestamps: string[]
+    event_counts: number[]
+    risk_scores: number[]
+  }
+  top_threats: Array<{
+    threat_type: string
+    count: number
+    severity: string
+    description: string
+  }>
+}

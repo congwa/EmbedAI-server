@@ -30,6 +30,51 @@ import {
   ChatMessageCreate,
   GetChatsQuery,
   ChatStats,
+  DashboardData,
+  SystemOverview,
+  UserActivityStatsQuery,
+  UserActivityStats,
+  KnowledgeBaseStatsQuery,
+  KnowledgeBaseStats,
+  PerformanceMetricsQuery,
+  PerformanceMetrics,
+  CostAnalysisQuery,
+  CostAnalysis,
+  ExportAnalyticsRequest,
+  SystemHealth,
+  SystemMetricsQuery,
+  SystemMetrics,
+  ServiceStatus,
+  PerformanceMonitoringQuery,
+  PerformanceMonitoring,
+  AlertsQuery,
+  Alert,
+  CreateAlertRequest,
+  UpdateAlertRequest,
+  AlertThresholds,
+  UpdateAlertThresholdsRequest,
+  UptimeQuery,
+  UptimeRecord,
+  IpListQuery,
+  IpWhitelistEntry,
+  CreateIpWhitelistRequest,
+  UpdateIpWhitelistRequest,
+  IpBlacklistEntry,
+  CreateIpBlacklistRequest,
+  UpdateIpBlacklistRequest,
+  SecurityEventsQuery,
+  SecurityEvent,
+  TwoFactorAuthSettings,
+  Enable2FARequest,
+  TwoFactorAuthResponse,
+  Disable2FARequest,
+  Verify2FARequest,
+  PasswordPolicy,
+  UpdatePasswordPolicyRequest,
+  DeviceFingerprintsQuery,
+  DeviceFingerprint,
+  SecurityAuditQuery,
+  SecurityAuditReport,
 } from './types'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
@@ -586,6 +631,374 @@ class AdminService {
     const response = await axios.get<ApiResponse<ChatStats>>(
       `${this.baseUrl}/api/v1/chat/admin/knowledge-bases/${kbId}/stats`,
       { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 分析报告相关接口
+
+  // 获取仪表板数据
+  async getDashboardData(): Promise<ApiResponse<DashboardData>> {
+    const response = await axios.get<ApiResponse<DashboardData>>(
+      `${this.baseUrl}/api/v1/admin/analytics/dashboard`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 获取系统概览
+  async getSystemOverview(period: string = '7d'): Promise<ApiResponse<SystemOverview>> {
+    const response = await axios.get<ApiResponse<SystemOverview>>(
+      `${this.baseUrl}/api/v1/admin/analytics/overview`,
+      {
+        params: { period },
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取用户活动统计
+  async getUserActivityStats(params: UserActivityStatsQuery): Promise<ApiResponse<UserActivityStats>> {
+    const response = await axios.get<ApiResponse<UserActivityStats>>(
+      `${this.baseUrl}/api/v1/admin/analytics/user-activity`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取知识库统计
+  async getKnowledgeBaseStats(params: KnowledgeBaseStatsQuery): Promise<ApiResponse<KnowledgeBaseStats>> {
+    const response = await axios.get<ApiResponse<KnowledgeBaseStats>>(
+      `${this.baseUrl}/api/v1/admin/analytics/knowledge-bases`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取性能指标
+  async getPerformanceMetrics(params: PerformanceMetricsQuery): Promise<ApiResponse<PerformanceMetrics>> {
+    const response = await axios.get<ApiResponse<PerformanceMetrics>>(
+      `${this.baseUrl}/api/v1/admin/analytics/performance`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取成本分析
+  async getCostAnalysis(params: CostAnalysisQuery): Promise<ApiResponse<CostAnalysis>> {
+    const response = await axios.get<ApiResponse<CostAnalysis>>(
+      `${this.baseUrl}/api/v1/admin/analytics/cost-analysis`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 导出分析数据
+  async exportAnalyticsData(data: ExportAnalyticsRequest): Promise<Blob> {
+    const response = await axios.post(
+      `${this.baseUrl}/api/v1/admin/analytics/export`,
+      data,
+      {
+        headers: this.getHeaders(),
+        responseType: 'blob',
+      }
+    )
+    return response.data
+  }
+
+  // 系统健康监控相关接口
+
+  // 获取系统健康状态
+  async getSystemHealth(): Promise<ApiResponse<SystemHealth>> {
+    const response = await axios.get<ApiResponse<SystemHealth>>(
+      `${this.baseUrl}/api/v1/admin/health`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 获取系统指标
+  async getSystemMetrics(params: SystemMetricsQuery): Promise<ApiResponse<SystemMetrics>> {
+    const response = await axios.get<ApiResponse<SystemMetrics>>(
+      `${this.baseUrl}/api/v1/admin/health/metrics`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取服务状态
+  async getServiceStatus(): Promise<ApiResponse<ServiceStatus[]>> {
+    const response = await axios.get<ApiResponse<ServiceStatus[]>>(
+      `${this.baseUrl}/api/v1/admin/health/services`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 获取性能监控数据
+  async getPerformanceMonitoring(params: PerformanceMonitoringQuery): Promise<ApiResponse<PerformanceMonitoring>> {
+    const response = await axios.get<ApiResponse<PerformanceMonitoring>>(
+      `${this.baseUrl}/api/v1/admin/health/performance`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 获取告警列表
+  async getAlerts(params: AlertsQuery): Promise<ApiResponse<PaginationData<Alert>>> {
+    const response = await axios.get<ApiResponse<PaginationData<Alert>>>(
+      `${this.baseUrl}/api/v1/admin/health/alerts`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 创建告警规则
+  async createAlert(data: CreateAlertRequest): Promise<ApiResponse<Alert>> {
+    const response = await axios.post<ApiResponse<Alert>>(
+      `${this.baseUrl}/api/v1/admin/health/alerts`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 更新告警规则
+  async updateAlert(id: number, data: UpdateAlertRequest): Promise<ApiResponse<Alert>> {
+    const response = await axios.put<ApiResponse<Alert>>(
+      `${this.baseUrl}/api/v1/admin/health/alerts/${id}`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 删除告警规则
+  async deleteAlert(id: number): Promise<ApiResponse<null>> {
+    const response = await axios.delete<ApiResponse<null>>(
+      `${this.baseUrl}/api/v1/admin/health/alerts/${id}`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 获取告警阈值配置
+  async getAlertThresholds(): Promise<ApiResponse<AlertThresholds>> {
+    const response = await axios.get<ApiResponse<AlertThresholds>>(
+      `${this.baseUrl}/api/v1/admin/health/thresholds`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 更新告警阈值配置
+  async updateAlertThresholds(data: UpdateAlertThresholdsRequest): Promise<ApiResponse<AlertThresholds>> {
+    const response = await axios.put<ApiResponse<AlertThresholds>>(
+      `${this.baseUrl}/api/v1/admin/health/thresholds`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 获取系统运行时间记录
+  async getSystemUptime(params: UptimeQuery): Promise<ApiResponse<UptimeRecord[]>> {
+    const response = await axios.get<ApiResponse<UptimeRecord[]>>(
+      `${this.baseUrl}/api/v1/admin/health/uptime`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 安全管理相关接口
+
+  // IP白名单管理
+  async getIpWhitelist(params: IpListQuery): Promise<ApiResponse<PaginationData<IpWhitelistEntry>>> {
+    const response = await axios.get<ApiResponse<PaginationData<IpWhitelistEntry>>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-whitelist`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  async addIpToWhitelist(data: CreateIpWhitelistRequest): Promise<ApiResponse<IpWhitelistEntry>> {
+    const response = await axios.post<ApiResponse<IpWhitelistEntry>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-whitelist`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async updateIpWhitelist(id: number, data: UpdateIpWhitelistRequest): Promise<ApiResponse<IpWhitelistEntry>> {
+    const response = await axios.put<ApiResponse<IpWhitelistEntry>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-whitelist/${id}`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async removeIpFromWhitelist(id: number): Promise<ApiResponse<null>> {
+    const response = await axios.delete<ApiResponse<null>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-whitelist/${id}`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // IP黑名单管理
+  async getIpBlacklist(params: IpListQuery): Promise<ApiResponse<PaginationData<IpBlacklistEntry>>> {
+    const response = await axios.get<ApiResponse<PaginationData<IpBlacklistEntry>>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-blacklist`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  async addIpToBlacklist(data: CreateIpBlacklistRequest): Promise<ApiResponse<IpBlacklistEntry>> {
+    const response = await axios.post<ApiResponse<IpBlacklistEntry>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-blacklist`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async updateIpBlacklist(id: number, data: UpdateIpBlacklistRequest): Promise<ApiResponse<IpBlacklistEntry>> {
+    const response = await axios.put<ApiResponse<IpBlacklistEntry>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-blacklist/${id}`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async removeIpFromBlacklist(id: number): Promise<ApiResponse<null>> {
+    const response = await axios.delete<ApiResponse<null>>(
+      `${this.baseUrl}/api/v1/admin/security/ip-blacklist/${id}`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 安全事件监控
+  async getSecurityEvents(params: SecurityEventsQuery): Promise<ApiResponse<PaginationData<SecurityEvent>>> {
+    const response = await axios.get<ApiResponse<PaginationData<SecurityEvent>>>(
+      `${this.baseUrl}/api/v1/admin/security/events`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 双因子认证管理
+  async get2FASettings(): Promise<ApiResponse<TwoFactorAuthSettings>> {
+    const response = await axios.get<ApiResponse<TwoFactorAuthSettings>>(
+      `${this.baseUrl}/api/v1/admin/security/2fa`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async enable2FA(data: Enable2FARequest): Promise<ApiResponse<TwoFactorAuthResponse>> {
+    const response = await axios.post<ApiResponse<TwoFactorAuthResponse>>(
+      `${this.baseUrl}/api/v1/admin/security/2fa/enable`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async disable2FA(data: Disable2FARequest): Promise<ApiResponse<null>> {
+    const response = await axios.post<ApiResponse<null>>(
+      `${this.baseUrl}/api/v1/admin/security/2fa/disable`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async verify2FA(data: Verify2FARequest): Promise<ApiResponse<null>> {
+    const response = await axios.post<ApiResponse<null>>(
+      `${this.baseUrl}/api/v1/admin/security/2fa/verify`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 密码策略管理
+  async getPasswordPolicy(): Promise<ApiResponse<PasswordPolicy>> {
+    const response = await axios.get<ApiResponse<PasswordPolicy>>(
+      `${this.baseUrl}/api/v1/admin/security/password-policy`,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  async updatePasswordPolicy(data: UpdatePasswordPolicyRequest): Promise<ApiResponse<PasswordPolicy>> {
+    const response = await axios.put<ApiResponse<PasswordPolicy>>(
+      `${this.baseUrl}/api/v1/admin/security/password-policy`,
+      data,
+      { headers: this.getHeaders() }
+    )
+    return response.data
+  }
+
+  // 设备指纹管理
+  async getDeviceFingerprints(params: DeviceFingerprintsQuery): Promise<ApiResponse<PaginationData<DeviceFingerprint>>> {
+    const response = await axios.get<ApiResponse<PaginationData<DeviceFingerprint>>>(
+      `${this.baseUrl}/api/v1/admin/security/device-fingerprints`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
+    )
+    return response.data
+  }
+
+  // 安全审计
+  async getSecurityAudit(params: SecurityAuditQuery): Promise<ApiResponse<SecurityAuditReport>> {
+    const response = await axios.get<ApiResponse<SecurityAuditReport>>(
+      `${this.baseUrl}/api/v1/admin/security/audit`,
+      {
+        params,
+        headers: this.getHeaders(),
+      }
     )
     return response.data
   }
