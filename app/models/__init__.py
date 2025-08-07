@@ -17,3 +17,4 @@ from .content import ContentModerationRule, ContentModerationLog, BulkOperation,
 from .integration import APIKey, Webhook, WebhookDelivery, Integration, APIEndpoint, APIUsageLog, IntegrationTemplate, APIDocumentation
 from .enums import PermissionType, TrainingStatus
 from .associations import knowledge_base_users
+from .prompt import PromptTemplate, PromptCategory, PromptVersion, PromptUsageLog

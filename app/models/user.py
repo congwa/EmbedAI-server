@@ -40,6 +40,9 @@ class User(Base):
     )
     # accessible_knowledge_bases 通过 KnowledgeBase 中的 backref 自动创建
     identities = relationship("UserIdentity", back_populates="official_user", passive_deletes=True)
+    
+    # 提示词模板关系
+    prompt_templates = relationship("PromptTemplate", back_populates="owner", cascade="all, delete-orphan")
 
     # RBAC关系定义将在rbac模型中通过backref创建
 
