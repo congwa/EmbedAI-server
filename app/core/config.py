@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     RAG_RERANK_MODEL: str = "bge-reranker-base"  # 重排序模型
     RAG_DEFAULT_RETRIEVAL_METHOD: str = "hybrid_search"  # 默认检索方法
     RAG_USE_RERANK: bool = True  # 是否默认使用重排序
+    
+    # 提示词管理配置
+    PROMPT_MAX_LENGTH: int = 50000  # 提示词最大长度（字符）
+    PROMPT_MAX_VARIABLES: int = 50  # 最大变量数量
+    PROMPT_VERSION_LIMIT: int = 100  # 版本数量限制
+    PROMPT_CACHE_TTL: int = 3600  # 缓存过期时间（秒）
+    PROMPT_DEFAULT_CATEGORY: str = "通用"  # 默认分类名称
+    PROMPT_ENABLE_ANALYTICS: bool = True  # 是否启用使用统计
+    PROMPT_ANALYTICS_RETENTION_DAYS: int = 90  # 统计数据保留天数
+    PROMPT_TEMPLATE_SUGGESTIONS_LIMIT: int = 10  # 模板建议数量限制
+    PROMPT_USAGE_LOG_BATCH_SIZE: int = 100  # 使用日志批处理大小
+    PROMPT_ENABLE_AUTO_OPTIMIZATION: bool = False  # 是否启用自动优化建议
 
     # 模型定价（美元/千Token）
     MODEL_PRICING: Dict[str, Dict[str, float]] = {
@@ -76,6 +88,16 @@ class Settings(BaseSettings):
                 embedding_dim=self.DEFAULT_EMBEDDING_DIM
             )
         )
+    
+    @property
+    def PROMPT_CONFIG(self) -> Dict[str, Any]:
+        """获取验证后的提示词配置"""
+        return validate_prompt_config(self)
+    
+    @property
+    def RAG_CONFIG(self) -> Dict[str, Any]:
+        """获取验证后的RAG配置"""
+        return validate_rag_config(self)
     
     class Config:
         env_file = ".env"
@@ -133,11 +155,84 @@ def validate_rag_config(settings: Settings) -> Dict[str, Any]:
         "use_rerank": settings.RAG_USE_RERANK
     }
 
+def validate_prompt_config(settings: Settings) -> Dict[str, Any]:
+    """验证提示词管理配置
+    
+    Args:
+        settings: 配置对象
+        
+    Returns:
+        Dict[str, Any]: 验证后的提示词配置
+    """
+    # 验证提示词最大长度
+    max_length = settings.PROMPT_MAX_LENGTH
+    if max_length < 100:
+        max_length = 100
+    elif max_length > 100000:
+        max_length = 100000
+        
+    # 验证最大变量数量
+    max_variables = settings.PROMPT_MAX_VARIABLES
+    if max_variables < 1:
+        max_variables = 1
+    elif max_variables > 100:
+        max_variables = 100
+        
+    # 验证版本数量限制
+    version_limit = settings.PROMPT_VERSION_LIMIT
+    if version_limit < 10:
+        version_limit = 10
+    elif version_limit > 1000:
+        version_limit = 1000
+        
+    # 验证缓存过期时间
+    cache_ttl = settings.PROMPT_CACHE_TTL
+    if cache_ttl < 60:
+        cache_ttl = 60
+    elif cache_ttl > 86400:  # 24小时
+        cache_ttl = 86400
+        
+    # 验证统计数据保留天数
+    retention_days = settings.PROMPT_ANALYTICS_RETENTION_DAYS
+    if retention_days < 7:
+        retention_days = 7
+    elif retention_days > 365:
+        retention_days = 365
+        
+    # 验证建议数量限制
+    suggestions_limit = settings.PROMPT_TEMPLATE_SUGGESTIONS_LIMIT
+    if suggestions_limit < 1:
+        suggestions_limit = 1
+    elif suggestions_limit > 50:
+        suggestions_limit = 50
+        
+    # 验证批处理大小
+    batch_size = settings.PROMPT_USAGE_LOG_BATCH_SIZE
+    if batch_size < 1:
+        batch_size = 1
+    elif batch_size > 1000:
+        batch_size = 1000
+        
+    return {
+        "max_length": max_length,
+        "max_variables": max_variables,
+        "version_limit": version_limit,
+        "cache_ttl": cache_ttl,
+        "default_category": settings.PROMPT_DEFAULT_CATEGORY,
+        "enable_analytics": settings.PROMPT_ENABLE_ANALYTICS,
+        "retention_days": retention_days,
+        "suggestions_limit": suggestions_limit,
+        "batch_size": batch_size,
+        "enable_auto_optimization": settings.PROMPT_ENABLE_AUTO_OPTIMIZATION
+    }
+
 @lru_cache()
 def get_settings():
     settings = Settings()
     # 验证RAG配置
     # settings.rag_config = validate_rag_config(settings)
+    # 验证提示词配置
+    # settings.prompt_config = validate_prompt_config(settings)
     return settings
 
 settings = get_settings()

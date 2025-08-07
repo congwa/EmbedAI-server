@@ -35,6 +35,10 @@ class KnowledgeBase(Base):
     embedding_model_provider = Column(String, nullable=True, comment='嵌入模型提供商')
     vector_store_type = Column(String, nullable=True, comment='向量存储类型')
     
+    # 提示词模板相关字段
+    default_prompt_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True, comment='默认提示词模板ID')
+    prompt_template_config = Column(JSON, nullable=True, comment='提示词模板配置，包含模板选择策略和变量映射')
+    
     # 时间字段
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
@@ -56,6 +60,7 @@ class KnowledgeBase(Base):
         passive_deletes=True
     )
     chats = relationship("Chat", back_populates="knowledge_base", cascade="all, delete-orphan")
+    default_prompt_template = relationship("PromptTemplate", foreign_keys=[default_prompt_template_id])
     
     @property
     def can_train(self) -> bool:
@@ -397,4 +402,100 @@ class KnowledgeBase(Base):
         if user.is_admin:
             return PermissionType.VIEWER
             
-        return None
+        return None    as
+ync def set_default_prompt_template(
+        self, 
+        db: Session, 
+        template_id: Optional[int], 
+        config: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """设置默认提示词模板
+        
+        Args:
+            db: 数据库会话
+            template_id: 提示词模板ID，None表示清除默认模板
+            config: 提示词模板配置
+        """
+        self.default_prompt_template_id = template_id
+        self.prompt_template_config = config or {}
+        self.updated_at = datetime.now()
+        
+        db.add(self)
+        await db.commit()
+        
+        Logger.info(f"知识库 {self.id} 设置默认提示词模板: {template_id}")
+    
+    def get_prompt_template_config(self) -> Dict[str, Any]:
+        """获取提示词模板配置
+        
+        Returns:
+            Dict[str, Any]: 提示词模板配置
+        """
+        return self.prompt_template_config or {}
+    
+    def get_template_variable_mapping(self) -> Dict[str, str]:
+        """获取模板变量映射配置
+        
+        Returns:
+            Dict[str, str]: 变量映射配置
+        """
+        config = self.get_prompt_template_config()
+        return config.get("variable_mapping", {})
+    
+    def get_template_selection_strategy(self) -> str:
+        """获取模板选择策略
+        
+        Returns:
+            str: 模板选择策略 (default, dynamic, user_choice)
+        """
+        config = self.get_prompt_template_config()
+        return config.get("selection_strategy", "default")
+    
+    async def get_recommended_templates(
+        self, 
+        db: Session, 
+        query_type: Optional[str] = None
+    ) -> List[int]:
+        """获取推荐的提示词模板ID列表
+        
+        Args:
+            db: 数据库会话
+            query_type: 查询类型
+            
+        Returns:
+            List[int]: 推荐的模板ID列表
+        """
+        config = self.get_prompt_template_config()
+        recommendations = config.get("recommendations", {})
+        
+        if query_type and query_type in recommendations:
+            return recommendations[query_type]
+        
+        # 返回默认推荐
+        return recommendations.get("default", [])
+    
+    def supports_dynamic_template_selection(self) -> bool:
+        """检查是否支持动态模板选择
+        
+        Returns:
+            bool: 是否支持动态选择
+        """
+        strategy = self.get_template_selection_strategy()
+        return strategy in ["dynamic", "user_choice"]
+    
+    def to_dict_with_prompt_config(self) -> Dict[str, Any]:
+        """转换为字典，包含提示词配置信息
+        
+        Returns:
+            Dict[str, Any]: 包含提示词配置的字典
+        """
+        result = self.to_dict()
+        
+        # 添加提示词模板相关信息
+        result.update({
+            "default_prompt_template_id": self.default_prompt_template_id,
+            "prompt_template_config": self.get_prompt_template_config(),
+            "supports_dynamic_templates": self.supports_dynamic_template_selection()
+        })
+        
+        return result
