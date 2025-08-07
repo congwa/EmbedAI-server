@@ -3,17 +3,108 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Technology Stack
+
 - **Backend**: FastAPI (Python 3.10+)
 - **Database**: PostgreSQL with SQLAlchemy ORM
 - **Cache**: Redis
 - **Queue**: Huey (for async tasks like knowledge base training)
-- **Graph Database**: Neo4j (for AI knowledge storage)
+- **RAG Engine**: app/rag modules (for AI knowledge processing)
 - **Deployment**: Docker (Dockerfile provided)
 - **Package Manager**: Poetry
 
 ## Architecture Overview
 
-This is the EmbedAI Server - a knowledge assistant system using graph databases and LLMs for high-performance knowledge retrieval and intelligent Q&A services.
+This is the EmbedAI Server - a knowledge assistant system using RAG (Retrieval-Augmented Generation) technology and LLMs for high-performance semantic retrieval and intelligent Q&A services.
+
+### RAG System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          EmbedAI RAG System                        │
+├─────────────────────────────────────────────────────────────────────┤
+│  FastAPI Server                                                     │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │   Auth & API    │  │   WebSocket     │  │   Admin Panel   │     │
+│  │   Endpoints     │  │   Chat Server   │  │   Management    │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+├─────────────────────────────────────────────────────────────────────┤
+│  RAG Processing Layer (app/rag/)                                    │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │   Document      │  │   Embedding     │  │   Retrieval     │     │
+│  │   Processing    │  │   Engine        │  │   Service       │     │
+│  │                 │  │                 │  │                 │     │
+│  │ • Extractor     │  │ • Vectorization │  │ • Semantic      │     │
+│  │ • Splitter      │  │ • Caching       │  │   Search        │     │
+│  │ • Cleaner       │  │ • Batch Proc.   │  │ • Reranking     │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+├─────────────────────────────────────────────────────────────────────┤
+│  Data & Cache Layer                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │   PostgreSQL    │  │     Redis       │  │   Huey Queue    │     │
+│  │                 │  │                 │  │                 │     │
+│  │ • Metadata      │  │ • Query Cache   │  │ • Training      │     │
+│  │ • Documents     │  │ • Vector Cache  │  │   Tasks         │     │
+│  │ • Users         │  │ • Sessions      │  │ • Async Jobs    │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+├─────────────────────────────────────────────────────────────────────┤
+│  External Services                                                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │   LLM Services  │  │   Embedding     │  │   Vector Store  │     │
+│  │                 │  │   Services      │  │   (Optional)    │     │
+│  │ • OpenAI        │  │ • OpenAI        │  │ • Milvus        │     │
+│  │ • SiliconFlow   │  │ • SiliconFlow   │  │ • Pinecone      │     │
+│  │ • Zhipu         │  │ • Local Models  │  │ • Chroma        │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### RAG Data Flow
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Document      │    │   Text          │    │   Vector        │
+│   Upload        │───→│   Processing    │───→│   Generation    │
+│                 │    │                 │    │                 │
+│ • PDF, Word     │    │ • Extract       │    │ • Embed         │
+│ • Excel, HTML   │    │ • Split         │    │ • Cache         │
+│ • Text, MD      │    │ • Clean         │    │ • Index         │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   LLM           │    │   Context       │    │   Semantic      │
+│   Response      │←───│   Assembly      │←───│   Retrieval     │
+│                 │    │                 │    │                 │
+│ • Generate      │    │ • Rerank        │    │ • Query Vector  │
+│ • Stream        │    │ • Context       │    │ • Similarity    │
+│ • Format        │    │ • Prompt        │    │ • Top-K         │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       ▲
+                                               ┌─────────────────┐
+                                               │   User Query    │
+                                               │   Processing    │
+                                               │                 │
+                                               │ • Vectorize     │
+                                               │ • Normalize     │
+                                               │ • Cache         │
+                                               └─────────────────┘
+```
+
+### Core RAG Components
+
+1. **Document Processing Pipeline**
+   - Multi-format extraction (PDF, Word, Excel, HTML, etc.)
+   - Intelligent text chunking with semantic awareness
+   - Batch embedding generation with caching
+
+2. **Semantic Retrieval Engine**
+   - Vector similarity search
+   - Hybrid search combining semantic and keyword matching
+   - Advanced reranking algorithms
+
+3. **LLM Integration**
+   - Multiple LLM provider support (OpenAI, SiliconFlow, Zhipu)
+   - Context-aware response generation
+   - Token usage tracking and cost optimization
 
 ### Core Components Structure
 - `/app/` - Main FastAPI application
@@ -22,19 +113,23 @@ This is the EmbedAI Server - a knowledge assistant system using graph databases 
   - `/services/` - Business logic services
   - `/core/` - Core configurations and middleware
   - `/schemas/` - Pydantic models for request/response
-- `/_rag/` - RAG (Retrieval-Augmented Generation) system
-  - `/retrieval/` - Knowledge retrieval algorithms
+- `/app/rag/` - RAG (Retrieval-Augmented Generation) system
+  - `/retrieval/` - Semantic retrieval services and engines
   - `/extractor/` - Document parsing and extraction utilities
-  - `/embedding/` - Text embedding services
-  - `/rag/docstore/` - Document storage and retrieval
+  - `/embedding/` - Text embedding and vectorization services
+  - `/splitter/` - Document chunking and splitting
+  - `/rerank/` - Result reranking and optimization
+  - `/training/` - Knowledge base training management
 
 ### Key Features
+
 - Multi-tenant knowledge base isolation
-- Graph-based knowledge storage (Neo4j)
-- Intelligent entity recognition and relationship analysis
-- Vector similarity search with multi-hop graph traversal
+- RAG-based knowledge processing and retrieval
+- Semantic search with vector similarity matching
+- Intelligent document chunking and embedding
 - Real-time WebSocket chat support
-- Document processing pipeline (PDF, text, Excel, etc)
+- Multi-format document processing pipeline (PDF, Word, Excel, etc)
+- Advanced reranking for improved result quality
 - User authentication and authorization
 
 ## Development Commands
@@ -95,27 +190,48 @@ poetry run bandit -r app/
 ```
 
 ## Configuration
+
 - Environment variables in `.env` file (see `.env.example` if exists)
 - Configuration handled in `app/core/config.py`
 - Database connection via `DATABASE_URL`
 - Redis connection via `REDIS_URL`
-- Neo4j connection via `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
+- LLM services via `SILICONFLOW_API_KEY`, `OPENAI_API_KEY`, etc.
 
 ## API Structure
+
 - Base URL: `/api/v1`
 - Authentication: JWT tokens (`Authorization: Bearer <token>`)
 - WebSocket: `/ws/chat/{knowledge_base_id}` for real-time chat
 - API documentation: Available at `/docs` when running locally
 
-## Database Models
-- **User**: System users with authentication
-- **KnowledgeBase**: Isolated knowledge containers
-- **Document**: Processed documents within knowledge bases
-- **ChatSession**: Chat interaction history
-- **Entity/Relation**: Graph nodes and edges for AI knowledge
+### Key API Endpoints
 
-## Knowledge Processing Pipeline
-1. Document upload → extraction → splitting → embedding
+**Knowledge Base Management**
+- `POST /api/v1/knowledge-bases` - Create knowledge base
+- `GET /api/v1/knowledge-bases` - List knowledge bases
+- `POST /api/v1/knowledge-bases/{id}/documents` - Upload documents
+- `POST /api/v1/knowledge-bases/{id}/train` - Start RAG training
+
+**RAG Search & Chat**
+- `POST /api/v1/knowledge-bases/{id}/search` - Semantic search
+- `POST /api/v1/chat/completions` - RAG-enhanced chat
+- `GET /api/v1/knowledge-bases/{id}/status` - Training status
+
+**Configuration**
+- `GET /api/v1/knowledge-bases/{id}/config` - Get RAG configuration
+- `PUT /api/v1/knowledge-bases/{id}/config` - Update RAG settings
+
+## Database Models
+
+- **User**: System users with authentication
+- **KnowledgeBase**: Isolated knowledge containers with RAG configuration
+- **Document**: Processed documents within knowledge bases
+- **DocumentChunk**: Text chunks with embeddings for semantic search
+- **ChatSession**: Chat interaction history
+
+## RAG Knowledge Processing Pipeline
+
+1. Document upload → extraction → intelligent splitting → embedding
 2. Training queue management via Huey workers
-3. Graph-based knowledge storage with Neo4j
-4. Real-time query processing with vector + graph retrieval
+3. Vector-based knowledge storage with semantic indexing
+4. Real-time query processing with semantic retrieval and reranking

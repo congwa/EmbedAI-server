@@ -5,7 +5,7 @@ import os
 from app.schemas.llm import LLMConfig, LLMServiceConfig, EmbeddingServiceConfig
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "GraphRAG Web API"
+    PROJECT_NAME: str = "RAG Knowledge Base API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
