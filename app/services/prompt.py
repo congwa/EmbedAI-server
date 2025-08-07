@@ -767,8 +767,7 @@ class PromptService:
         except Exception as e:
             Logger.error(f"记录模板使用日志失败: {str(e)}")
 
-class
- PromptCategoryService:
+class PromptCategoryService:
     """提示词分类服务类
     
     处理提示词分类相关的业务逻辑，包括分类的创建、查询、更新、删除等操作
@@ -1219,8 +1218,7 @@ class
             current_id = parent_row[0] if parent_row else None
         
         return False
-c
-lass PromptVersionService:
+class PromptVersionService:
     """提示词版本管理服务类
     
     处理提示词模板版本相关的业务逻辑，包括版本的创建、发布、回滚、比较等操作
@@ -1776,8 +1774,7 @@ lass PromptVersionService:
             "removed_variables": removed_vars,
             "modified_variables": modified_vars
         }
-cla
-ss PromptAnalyticsService:
+class PromptAnalyticsService:
     """提示词统计分析服务类
     
     处理提示词使用统计和性能分析相关的业务逻辑
@@ -2211,8 +2208,9 @@ ss PromptAnalyticsService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取错误分析失败: {str(e)}"
-            )    asy
-nc def update_category(
+            )    
+            
+    async def update_category(
         self, 
         category_id: int, 
         category_data: PromptCategoryUpdate
