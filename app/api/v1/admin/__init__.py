@@ -13,6 +13,7 @@ from .config import router as config_router  # 系统配置管理
 from .security import router as security_router  # 安全管理
 from .content import router as content_router  # 内容管理
 from .integration import router as integration_router  # 集成管理
+from .prompts import router as prompts_router  # 提示词管理
 
 # 创建管理端总路由
 router = APIRouter()
@@ -49,3 +50,6 @@ router.include_router(content_router, prefix="/content", tags=["admin-content"])
 
 # 集成管理
 router.include_router(integration_router, prefix="/integration", tags=["admin-integration"])
+
+# 提示词管理
+router.include_router(prompts_router, prefix="/prompts", tags=["admin-prompts"])

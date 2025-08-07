@@ -249,8 +249,7 @@ class PromptTemplateValidateResponse(CustomBaseModel):
         }
     )
 
-clas
-s PromptCategoryCreate(CustomBaseModel):
+class PromptCategoryCreate(CustomBaseModel):
     """创建提示词分类请求"""
     name: str = Field(..., min_length=1, max_length=255, description="分类名称")
     description: Optional[str] = Field(default=None, description="分类描述")

@@ -2211,4 +2211,147 @@ ss PromptAnalyticsService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取错误分析失败: {str(e)}"
+            )    asy
+nc def update_category(
+        self, 
+        category_id: int, 
+        category_data: PromptCategoryUpdate
+    ) -> PromptCategory:
+        """更新提示词分类
+        
+        Args:
+            category_id: 分类ID
+            category_data: 更新数据
+            
+        Returns:
+            PromptCategory: 更新后的分类对象
+        """
+        try:
+            # 获取现有分类
+            category = await self.get_category(category_id)
+            
+            # 检查名称是否重复
+            if category_data.name and category_data.name != category.name:
+                existing = await self.db.execute(
+                    select(PromptCategory).filter(
+                        and_(
+                            PromptCategory.name == category_data.name,
+                            PromptCategory.parent_id == category.parent_id,
+                            PromptCategory.id != category_id,
+                            PromptCategory.is_active == True
+                        )
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"分类名称 '{category_data.name}' 已存在"
+                    )
+            
+            # 验证父分类
+            if category_data.parent_id is not None and category_data.parent_id != category.parent_id:
+                if category_data.parent_id == category_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="分类不能设置自己为父分类"
+                    )
+                
+                if category_data.parent_id:
+                    parent_category = await self.db.execute(
+                        select(PromptCategory).filter(
+                            and_(
+                                PromptCategory.id == category_data.parent_id,
+                                PromptCategory.is_active == True
+                            )
+                        )
+                    )
+                    if not parent_category.scalar_one_or_none():
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"父分类ID {category_data.parent_id} 不存在"
+                        )
+            
+            # 更新分类
+            update_data = category_data.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(category, field, value)
+            
+            category.updated_at = datetime.now()
+            
+            await self.db.commit()
+            await self.db.refresh(category)
+            
+            Logger.info(f"提示词分类更新成功: ID={category.id}")
+            return category
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            Logger.error(f"更新提示词分类失败: {str(e)}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"更新分类失败: {str(e)}"
+            )
+    
+    async def delete_category(self, category_id: int) -> None:
+        """删除提示词分类（软删除）
+        
+        Args:
+            category_id: 分类ID
+        """
+        try:
+            # 获取分类
+            category = await self.get_category(category_id)
+            
+            # 检查是否有子分类
+            children_result = await self.db.execute(
+                select(PromptCategory).filter(
+                    and_(
+                        PromptCategory.parent_id == category_id,
+                        PromptCategory.is_active == True
+                    )
+                )
+            )
+            children = children_result.scalars().all()
+            
+            if children:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="不能删除包含子分类的分类，请先删除或移动子分类"
+                )
+            
+            # 检查是否有关联的模板
+            templates_result = await self.db.execute(
+                select(PromptTemplate).filter(
+                    and_(
+                        PromptTemplate.category_id == category_id,
+                        PromptTemplate.is_active == True
+                    )
+                )
+            )
+            templates = templates_result.scalars().all()
+            
+            if templates:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="不能删除包含模板的分类，请先删除或移动模板"
+                )
+            
+            # 软删除
+            category.is_active = False
+            category.updated_at = datetime.now()
+            
+            await self.db.commit()
+            
+            Logger.info(f"提示词分类删除成功: ID={category_id}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            Logger.error(f"删除提示词分类失败: {str(e)}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"删除分类失败: {str(e)}"
             )
