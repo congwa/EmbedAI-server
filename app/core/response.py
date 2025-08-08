@@ -126,7 +126,15 @@ class PaginationResponseModel(ResponseModel[PaginationData[T]], Generic[T]):
     data: Optional[PaginationData[T]] = None
 
 class APIResponse:
-    """统一的API响应格式封装"""
+    """统一的API响应格式封装
+    
+    注意：此类已被标记为废弃，建议使用新的响应机制：
+    - 使用 ResponseModel.create_success() 替代 APIResponse.success()
+    - 使用 ResponseModel.create_error() 替代 APIResponse.error()
+    - 使用 ResponseModel.create_pagination() 替代 APIResponse.pagination()
+    
+    此类将在未来版本中移除，目前保留用于向后兼容。
+    """
     
     @staticmethod
     def _process_data(data: Any) -> Any:
@@ -147,7 +155,17 @@ class APIResponse:
         message: str = "操作成功",
         status_code: int = status.HTTP_200_OK
     ) -> JSONResponse:
-        """成功响应"""
+        """成功响应
+        
+        警告：此方法已废弃，请使用 ResponseModel.create_success() 替代
+        """
+        import warnings
+        warnings.warn(
+            "APIResponse.success() 已废弃，请使用 ResponseModel.create_success() 替代",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
         response = ResponseModel(
             success=True,
             code=status_code,
@@ -165,7 +183,17 @@ class APIResponse:
         code: int = status.HTTP_400_BAD_REQUEST,
         data: Optional[Any] = None
     ) -> JSONResponse:
-        """错误响应"""
+        """错误响应
+        
+        警告：此方法已废弃，请使用 ResponseModel.create_error() 或抛出自定义异常替代
+        """
+        import warnings
+        warnings.warn(
+            "APIResponse.error() 已废弃，请使用 ResponseModel.create_error() 或抛出自定义异常替代",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
         response = ResponseModel(
             success=False,
             code=code,
@@ -185,7 +213,17 @@ class APIResponse:
         page_size: int,
         message: str = "获取列表成功"
     ) -> JSONResponse:
-        """分页数据响应"""
+        """分页数据响应
+        
+        警告：此方法已废弃，请使用 ResponseModel.create_pagination() 替代
+        """
+        import warnings
+        warnings.warn(
+            "APIResponse.pagination() 已废弃，请使用 ResponseModel.create_pagination() 替代",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
         pagination = PaginationModel(
             total=total,
             page=page,
@@ -213,7 +251,17 @@ def response_wrapper(
     error_code: int = status.HTTP_400_BAD_REQUEST,
     error_msg: str = "操作失败"
 ):
-    """统一响应装饰器"""
+    """统一响应装饰器
+    
+    警告：此装饰器已废弃，请移除装饰器并使用新的响应机制
+    """
+    import warnings
+    warnings.warn(
+        "@response_wrapper 装饰器已废弃，请移除装饰器并使用新的响应机制",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
