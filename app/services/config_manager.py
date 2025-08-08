@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from datetime import datetime
@@ -169,6 +169,98 @@ class ConfigManager:
                 detail=f"重置配置失败: {str(e)}"
             )
     
+    async def update_rag_config(
+        self, 
+        config_updates: Dict[str, Any], 
+        user_id: int
+    ) -> Dict[str, Any]:
+        """更新RAG配置
+        
+        Args:
+            config_updates: 配置更新数据
+            user_id: 操作用户ID
+            
+        Returns:
+            Dict[str, Any]: 更新后的配置
+        """
+        try:
+            Logger.info(f"用户 {user_id} 更新RAG配置")
+            
+            # 获取当前配置
+            current_config = settings.RAG_CONFIG.copy()
+            
+            # 应用更新
+            for key, value in config_updates.items():
+                if key in current_config:
+                    current_config[key] = value
+                else:
+                    Logger.warning(f"忽略未知的配置项: {key}")
+            
+            # 验证更新后的配置
+            validated_config = self._validate_rag_config_update(current_config)
+            
+            # 更新缓存
+            self._config_cache["rag"] = validated_config
+            self._last_update["rag"] = datetime.now().isoformat()
+            
+            # 记录配置变更
+            await self._log_config_change(
+                config_type="rag",
+                old_config=settings.RAG_CONFIG,
+                new_config=validated_config,
+                user_id=user_id
+            )
+            
+            Logger.info("RAG配置更新成功")
+            return validated_config
+            
+        except Exception as e:
+            Logger.error(f"更新RAG配置失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"更新配置失败: {str(e)}"
+            )
+    
+    async def reset_rag_config(self, user_id: int) -> Dict[str, Any]:
+        """重置RAG配置为默认值
+        
+        Args:
+            user_id: 操作用户ID
+            
+        Returns:
+            Dict[str, Any]: 重置后的配置
+        """
+        try:
+            Logger.info(f"用户 {user_id} 重置RAG配置")
+            
+            # 获取默认配置
+            default_config = validate_rag_config(settings)
+            
+            # 清除缓存
+            if "rag" in self._config_cache:
+                del self._config_cache["rag"]
+            
+            self._last_update["rag"] = datetime.now().isoformat()
+            
+            # 记录配置重置
+            await self._log_config_change(
+                config_type="rag",
+                old_config=settings.RAG_CONFIG,
+                new_config=default_config,
+                user_id=user_id,
+                action="reset"
+            )
+            
+            Logger.info("RAG配置重置成功")
+            return default_config
+            
+        except Exception as e:
+            Logger.error(f"重置RAG配置失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"重置配置失败: {str(e)}"
+            )
+    
     async def get_config_history(
         self, 
         config_type: str, 
@@ -233,7 +325,7 @@ class ConfigManager:
                     "warnings": []
                 }
             elif config_type == "rag":
-                validated = validate_rag_config(settings)
+                validated = self._validate_rag_config_update(config_data)
                 return {
                     "valid": True,
                     "validated_config": validated,
@@ -308,6 +400,74 @@ class ConfigManager:
             if not isinstance(enable_auto_optimization, bool):
                 raise ValueError("enable_auto_optimization 必须是布尔值")
             validated["enable_auto_optimization"] = enable_auto_optimization
+        
+        return validated
+    
+    def _validate_rag_config_update(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """验证RAG配置更新
+        
+        Args:
+            config: 配置数据
+            
+        Returns:
+            Dict[str, Any]: 验证后的配置
+        """
+        validated = {}
+        
+        # 验证分块大小
+        if "chunk_size" in config:
+            chunk_size = config["chunk_size"]
+            if not isinstance(chunk_size, int) or chunk_size < 100 or chunk_size > 10000:
+                raise ValueError("chunk_size 必须是100-10000之间的整数")
+            validated["chunk_size"] = chunk_size
+        
+        # 验证分块重叠大小
+        if "chunk_overlap" in config:
+            chunk_overlap = config["chunk_overlap"]
+            if not isinstance(chunk_overlap, int) or chunk_overlap < 0:
+                raise ValueError("chunk_overlap 必须是非负整数")
+            # 如果有chunk_size，检查重叠不能超过一半
+            chunk_size = config.get("chunk_size", validated.get("chunk_size", 1000))
+            if chunk_overlap > chunk_size // 2:
+                raise ValueError("chunk_overlap 不能超过chunk_size的一半")
+            validated["chunk_overlap"] = chunk_overlap
+        
+        # 验证向量存储类型
+        if "vector_store_type" in config:
+            vector_store_type = config["vector_store_type"]
+            supported_types = ["chroma", "qdrant", "milvus", "pgvector"]
+            if vector_store_type not in supported_types:
+                raise ValueError(f"vector_store_type 必须是以下之一: {', '.join(supported_types)}")
+            validated["vector_store_type"] = vector_store_type
+        
+        # 验证批处理大小
+        if "batch_size" in config:
+            batch_size = config["batch_size"]
+            if not isinstance(batch_size, int) or batch_size < 1 or batch_size > 1000:
+                raise ValueError("batch_size 必须是1-1000之间的整数")
+            validated["batch_size"] = batch_size
+        
+        # 验证重排序模型
+        if "rerank_model" in config:
+            rerank_model = config["rerank_model"]
+            if not isinstance(rerank_model, str) or not rerank_model.strip():
+                raise ValueError("rerank_model 必须是非空字符串")
+            validated["rerank_model"] = rerank_model.strip()
+        
+        # 验证检索方法
+        if "retrieval_method" in config:
+            retrieval_method = config["retrieval_method"]
+            supported_methods = ["semantic_search", "keyword_search", "hybrid_search"]
+            if retrieval_method not in supported_methods:
+                raise ValueError(f"retrieval_method 必须是以下之一: {', '.join(supported_methods)}")
+            validated["retrieval_method"] = retrieval_method
+        
+        # 验证是否使用重排序
+        if "use_rerank" in config:
+            use_rerank = config["use_rerank"]
+            if not isinstance(use_rerank, bool):
+                raise ValueError("use_rerank 必须是布尔值")
+            validated["use_rerank"] = use_rerank
         
         return validated
     

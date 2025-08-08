@@ -40,6 +40,396 @@ async def get_config_dashboard(
         Logger.error(f"获取配置仪表板数据失败: {str(e)}")
         raise HTTPException(status_code=500, detail="获取配置仪表板数据失败")
 
+# ==================== 提示词管理配置 ====================
+
+@router.get("/prompt", response_model=ResponseModel[Dict[str, Any]])
+async def get_prompt_config(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取提示词管理配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        config = await config_manager.get_prompt_config()
+        return APIResponse.success(data=config)
+        
+    except Exception as e:
+        Logger.error(f"获取提示词配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取提示词配置失败")
+
+@router.put("/prompt", response_model=ResponseModel[Dict[str, Any]])
+async def update_prompt_config(
+    config_updates: Dict[str, Any],
+    request: Request,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新提示词管理配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        updated_config = await config_manager.update_prompt_config(
+            config_updates=config_updates,
+            user_id=current_admin.id
+        )
+        return APIResponse.success(data=updated_config)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        Logger.error(f"更新提示词配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="更新提示词配置失败")
+
+@router.post("/prompt/reset", response_model=ResponseModel[Dict[str, Any]])
+async def reset_prompt_config(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重置提示词配置为默认值"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        reset_config = await config_manager.reset_prompt_config(user_id=current_admin.id)
+        return APIResponse.success(data=reset_config)
+        
+    except Exception as e:
+        Logger.error(f"重置提示词配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="重置提示词配置失败")
+
+@router.get("/prompt/history", response_model=ResponseModel[List[Dict[str, Any]]])
+async def get_prompt_config_history(
+    limit: int = Query(10, ge=1, le=100, description="返回记录数量"),
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取提示词配置变更历史"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        history = await config_manager.get_config_history(
+            config_type="prompt",
+            limit=limit
+        )
+        return APIResponse.success(data=history)
+        
+    except Exception as e:
+        Logger.error(f"获取提示词配置历史失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取提示词配置历史失败")
+
+@router.post("/prompt/validate", response_model=ResponseModel[Dict[str, Any]])
+async def validate_prompt_config(
+    config_data: Dict[str, Any],
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """验证提示词配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        validation_result = await config_manager.validate_config(
+            config_type="prompt",
+            config_data=config_data
+        )
+        return APIResponse.success(data=validation_result)
+        
+    except Exception as e:
+        Logger.error(f"验证提示词配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="验证提示词配置失败")
+
+@router.get("/prompt/options", response_model=ResponseModel[Dict[str, Any]])
+async def get_prompt_config_options(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取提示词配置选项和限制"""
+    try:
+        options = {
+            "max_length": {
+                "min": 100,
+                "max": 100000,
+                "default": 50000,
+                "description": "提示词模板最大长度（字符）"
+            },
+            "max_variables": {
+                "min": 1,
+                "max": 100,
+                "default": 50,
+                "description": "模板最大变量数量"
+            },
+            "version_limit": {
+                "min": 10,
+                "max": 1000,
+                "default": 100,
+                "description": "版本历史保留数量"
+            },
+            "cache_ttl": {
+                "min": 60,
+                "max": 86400,
+                "default": 3600,
+                "description": "缓存过期时间（秒）"
+            },
+            "retention_days": {
+                "min": 7,
+                "max": 365,
+                "default": 90,
+                "description": "使用统计数据保留天数"
+            },
+            "suggestions_limit": {
+                "min": 1,
+                "max": 50,
+                "default": 10,
+                "description": "模板建议数量限制"
+            },
+            "batch_size": {
+                "min": 1,
+                "max": 1000,
+                "default": 100,
+                "description": "批处理大小"
+            },
+            "enable_analytics": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否启用使用统计"
+            },
+            "enable_auto_optimization": {
+                "type": "boolean",
+                "default": False,
+                "description": "是否启用自动优化建议"
+            }
+        }
+        return APIResponse.success(data=options)
+        
+    except Exception as e:
+        Logger.error(f"获取提示词配置选项失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取提示词配置选项失败")
+
+@router.get("/prompt/stats", response_model=ResponseModel[Dict[str, Any]])
+async def get_prompt_config_stats(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取提示词配置相关统计信息"""
+    try:
+        from app.services.prompt import PromptService
+        from app.models.prompt import PromptTemplate, PromptUsageLog
+        from sqlalchemy import select, func
+        
+        # 获取模板统计
+        template_count_result = await db.execute(
+            select(func.count(PromptTemplate.id)).filter(PromptTemplate.is_active == True)
+        )
+        template_count = template_count_result.scalar()
+        
+        # 获取使用统计
+        usage_count_result = await db.execute(
+            select(func.count(PromptUsageLog.id))
+        )
+        usage_count = usage_count_result.scalar()
+        
+        # 获取今日使用统计
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        today_usage_result = await db.execute(
+            select(func.count(PromptUsageLog.id)).filter(
+                func.date(PromptUsageLog.created_at) == today
+            )
+        )
+        today_usage = today_usage_result.scalar()
+        
+        stats = {
+            "total_templates": template_count,
+            "total_usage": usage_count,
+            "today_usage": today_usage,
+            "config_last_updated": datetime.now().isoformat(),
+            "cache_status": "active"
+        }
+        
+        return APIResponse.success(data=stats)
+        
+    except Exception as e:
+        Logger.error(f"获取提示词配置统计失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取提示词配置统计失败")
+
+# ==================== RAG配置管理 ====================
+
+@router.get("/rag", response_model=ResponseModel[Dict[str, Any]])
+async def get_rag_config(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取RAG配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        config = await config_manager.get_rag_config()
+        return APIResponse.success(data=config)
+        
+    except Exception as e:
+        Logger.error(f"获取RAG配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取RAG配置失败")
+
+@router.put("/rag", response_model=ResponseModel[Dict[str, Any]])
+async def update_rag_config(
+    config_updates: Dict[str, Any],
+    request: Request,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新RAG配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        updated_config = await config_manager.update_rag_config(
+            config_updates=config_updates,
+            user_id=current_admin.id
+        )
+        return APIResponse.success(data=updated_config)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        Logger.error(f"更新RAG配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="更新RAG配置失败")
+
+@router.post("/rag/reset", response_model=ResponseModel[Dict[str, Any]])
+async def reset_rag_config(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重置RAG配置为默认值"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        reset_config = await config_manager.reset_rag_config(user_id=current_admin.id)
+        return APIResponse.success(data=reset_config)
+        
+    except Exception as e:
+        Logger.error(f"重置RAG配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="重置RAG配置失败")
+
+@router.post("/rag/validate", response_model=ResponseModel[Dict[str, Any]])
+async def validate_rag_config(
+    config_data: Dict[str, Any],
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """验证RAG配置"""
+    try:
+        from app.services.config_manager import ConfigManager
+        config_manager = ConfigManager(db)
+        validation_result = await config_manager.validate_config(
+            config_type="rag",
+            config_data=config_data
+        )
+        return APIResponse.success(data=validation_result)
+        
+    except Exception as e:
+        Logger.error(f"验证RAG配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="验证RAG配置失败")
+
+@router.get("/rag/options", response_model=ResponseModel[Dict[str, Any]])
+async def get_rag_config_options(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取RAG配置选项和限制"""
+    try:
+        options = {
+            "chunk_size": {
+                "min": 100,
+                "max": 10000,
+                "default": 1000,
+                "description": "文本分块大小（字符）"
+            },
+            "chunk_overlap": {
+                "min": 0,
+                "max": 5000,
+                "default": 200,
+                "description": "文本分块重叠大小（字符）"
+            },
+            "vector_store_type": {
+                "type": "enum",
+                "options": ["chroma", "qdrant", "milvus", "pgvector"],
+                "default": "chroma",
+                "description": "向量存储类型"
+            },
+            "batch_size": {
+                "min": 1,
+                "max": 1000,
+                "default": 100,
+                "description": "批处理大小"
+            },
+            "retrieval_method": {
+                "type": "enum",
+                "options": ["semantic_search", "keyword_search", "hybrid_search"],
+                "default": "hybrid_search",
+                "description": "检索方法"
+            },
+            "use_rerank": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否使用重排序"
+            },
+            "rerank_model": {
+                "type": "string",
+                "default": "bge-reranker-base",
+                "description": "重排序模型名称"
+            }
+        }
+        return APIResponse.success(data=options)
+        
+    except Exception as e:
+        Logger.error(f"获取RAG配置选项失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取RAG配置选项失败")
+
+@router.get("/rag/stats", response_model=ResponseModel[Dict[str, Any]])
+async def get_rag_config_stats(
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取RAG配置相关统计信息"""
+    try:
+        from app.models.knowledge_base import KnowledgeBase
+        from app.models.document import Document
+        from sqlalchemy import select, func
+        
+        # 获取知识库统计
+        kb_count_result = await db.execute(
+            select(func.count(KnowledgeBase.id)).filter(KnowledgeBase.is_active == True)
+        )
+        kb_count = kb_count_result.scalar()
+        
+        # 获取文档统计
+        doc_count_result = await db.execute(
+            select(func.count(Document.id))
+        )
+        doc_count = doc_count_result.scalar()
+        
+        # 获取今日创建的知识库数量
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        today_kb_result = await db.execute(
+            select(func.count(KnowledgeBase.id)).filter(
+                func.date(KnowledgeBase.created_at) == today
+            )
+        )
+        today_kb_count = today_kb_result.scalar()
+        
+        stats = {
+            "total_knowledge_bases": kb_count,
+            "total_documents": doc_count,
+            "today_knowledge_bases": today_kb_count,
+            "config_last_updated": datetime.now().isoformat(),
+            "cache_status": "active"
+        }
+        
+        return APIResponse.success(data=stats)
+        
+    except Exception as e:
+        Logger.error(f"获取RAG配置统计失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取RAG配置统计失败")
+
 # ==================== 系统配置管理 ====================
 
 @router.post("/configs", response_model=ResponseModel[SystemConfigResponse])
