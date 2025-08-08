@@ -402,8 +402,9 @@ class KnowledgeBase(Base):
         if user.is_admin:
             return PermissionType.VIEWER
             
-        return None    as
-ync def set_default_prompt_template(
+        return None
+
+    async def set_default_prompt_template(
         self, 
         db: Session, 
         template_id: Optional[int], 

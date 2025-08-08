@@ -6,6 +6,7 @@ from app.models.database import create_tables
 from app.core.exceptions import (
     ValidationError,
     SQLAlchemyError,
+    APIException,
     http_exception_handler,
     sqlalchemy_exception_handler,
     validation_exception_handler,
@@ -52,6 +53,33 @@ app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(ValidationError, validation_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
+
+# 注册新的API异常处理器
+@app.exception_handler(APIException)
+async def api_exception_handler(request: Request, exc: APIException):
+    """处理自定义API异常"""
+    from app.core.response import ResponseModel
+    
+    Logger.error(
+        f"API异常: {exc.message}",
+        request_path=request.url.path,
+        request_method=request.method,
+        error_code=exc.code,
+        error_data=exc.data
+    )
+    
+    response_data = ResponseModel(
+        success=False,
+        code=exc.code,
+        message=exc.message,
+        data=exc.data
+    )
+    
+    return JSONResponse(
+        status_code=exc.code,
+        content=response_data.model_dump(),
+        headers=exc.headers
+    )
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

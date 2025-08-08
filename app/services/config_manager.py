@@ -1,14 +1,21 @@
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 from datetime import datetime
 import json
 
 from app.core.config import settings, validate_prompt_config, validate_rag_config
 from app.core.logger import Logger
+from app.services.base import BaseService, ConfigServiceMixin
+from app.core.exceptions import (
+    APIException,
+    SystemException,
+    ConfigurationException,
+    BusinessException,
+    ValidationException
+)
 
 
-class ConfigManager:
+class ConfigManager(BaseService, ConfigServiceMixin):
     """配置管理服务
     
     处理系统配置的读取、更新和验证
@@ -21,7 +28,7 @@ class ConfigManager:
         Args:
             db (AsyncSession): 数据库会话对象
         """
-        self.db = db
+        super().__init__(db)
         self._config_cache = {}
         self._last_update = {}
     
@@ -30,10 +37,13 @@ class ConfigManager:
         
         Returns:
             Dict[str, Any]: 提示词配置
-        """
-        try:
-            Logger.info("获取提示词管理配置")
             
+        Raises:
+            ConfigurationException: 当配置获取失败时
+        """
+        self.log_operation("get_prompt_config")
+        
+        try:
             config = settings.PROMPT_CONFIG
             
             # 添加运行时信息
@@ -46,9 +56,9 @@ class ConfigManager:
             
         except Exception as e:
             Logger.error(f"获取提示词配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"获取配置失败: {str(e)}"
+            raise ConfigurationException(
+                message="获取提示词配置失败",
+                config_key="prompt"
             )
     
     async def get_rag_config(self) -> Dict[str, Any]:
@@ -56,10 +66,13 @@ class ConfigManager:
         
         Returns:
             Dict[str, Any]: RAG配置
-        """
-        try:
-            Logger.info("获取RAG配置")
             
+        Raises:
+            ConfigurationException: 当配置获取失败时
+        """
+        self.log_operation("get_rag_config")
+        
+        try:
             config = settings.RAG_CONFIG
             
             # 添加运行时信息
@@ -72,9 +85,9 @@ class ConfigManager:
             
         except Exception as e:
             Logger.error(f"获取RAG配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"获取配置失败: {str(e)}"
+            raise ConfigurationException(
+                message="获取RAG配置失败",
+                config_key="rag"
             )
     
     async def update_prompt_config(
@@ -90,44 +103,56 @@ class ConfigManager:
             
         Returns:
             Dict[str, Any]: 更新后的配置
+            
+        Raises:
+            ValidationException: 当配置验证失败时
+            ConfigurationException: 当配置更新失败时
         """
-        try:
-            Logger.info(f"用户 {user_id} 更新提示词管理配置")
-            
-            # 获取当前配置
-            current_config = settings.PROMPT_CONFIG.copy()
-            
-            # 应用更新
-            for key, value in config_updates.items():
-                if key in current_config:
-                    current_config[key] = value
-                else:
-                    Logger.warning(f"忽略未知的配置项: {key}")
-            
-            # 验证更新后的配置
-            validated_config = self._validate_prompt_config_update(current_config)
-            
-            # 更新缓存
-            self._config_cache["prompt"] = validated_config
-            self._last_update["prompt"] = datetime.now().isoformat()
-            
-            # 记录配置变更
-            await self._log_config_change(
+        self.log_operation("update_prompt_config", user_id=user_id, details=config_updates)
+        
+        # 验证配置更新数据
+        self.validate_business_rule(
+            bool(config_updates), 
+            "配置更新数据不能为空"
+        )
+        
+        # 获取当前配置
+        current_config = settings.PROMPT_CONFIG.copy()
+        
+        # 应用更新
+        for key, value in config_updates.items():
+            if key in current_config:
+                # 验证配置值
+                self.validate_config_value(value)
+                current_config[key] = value
+            else:
+                Logger.warning(f"忽略未知的配置项: {key}")
+        
+        # 验证更新后的配置
+        validated_config = await self.safe_execute(
+            lambda: self._validate_prompt_config_update(current_config),
+            "配置验证失败",
+            "CONFIG_VALIDATION_ERROR"
+        )
+        
+        # 更新缓存
+        self._config_cache["prompt"] = validated_config
+        self._last_update["prompt"] = datetime.now().isoformat()
+        
+        # 记录配置变更
+        await self.safe_execute(
+            lambda: self._log_config_change(
                 config_type="prompt",
                 old_config=settings.PROMPT_CONFIG,
                 new_config=validated_config,
                 user_id=user_id
-            )
-            
-            Logger.info("提示词配置更新成功")
-            return validated_config
-            
-        except Exception as e:
-            Logger.error(f"更新提示词配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"更新配置失败: {str(e)}"
-            )
+            ),
+            "配置变更记录失败",
+            "CONFIG_LOG_ERROR"
+        )
+        
+        Logger.info("提示词配置更新成功")
+        return validated_config
     
     async def reset_prompt_config(self, user_id: int) -> Dict[str, Any]:
         """重置提示词配置为默认值
@@ -137,37 +162,40 @@ class ConfigManager:
             
         Returns:
             Dict[str, Any]: 重置后的配置
+            
+        Raises:
+            ConfigurationException: 当配置重置失败时
         """
-        try:
-            Logger.info(f"用户 {user_id} 重置提示词配置")
-            
-            # 获取默认配置
-            default_config = validate_prompt_config(settings)
-            
-            # 清除缓存
-            if "prompt" in self._config_cache:
-                del self._config_cache["prompt"]
-            
-            self._last_update["prompt"] = datetime.now().isoformat()
-            
-            # 记录配置重置
-            await self._log_config_change(
+        self.log_operation("reset_prompt_config", user_id=user_id)
+        
+        # 获取默认配置
+        default_config = await self.safe_execute(
+            lambda: validate_prompt_config(settings),
+            "获取默认配置失败",
+            "DEFAULT_CONFIG_ERROR"
+        )
+        
+        # 清除缓存
+        if "prompt" in self._config_cache:
+            del self._config_cache["prompt"]
+        
+        self._last_update["prompt"] = datetime.now().isoformat()
+        
+        # 记录配置重置
+        await self.safe_execute(
+            lambda: self._log_config_change(
                 config_type="prompt",
                 old_config=settings.PROMPT_CONFIG,
                 new_config=default_config,
                 user_id=user_id,
                 action="reset"
-            )
-            
-            Logger.info("提示词配置重置成功")
-            return default_config
-            
-        except Exception as e:
-            Logger.error(f"重置提示词配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"重置配置失败: {str(e)}"
-            )
+            ),
+            "配置重置记录失败",
+            "CONFIG_RESET_LOG_ERROR"
+        )
+        
+        Logger.info("提示词配置重置成功")
+        return default_config
     
     async def update_rag_config(
         self, 
@@ -182,44 +210,56 @@ class ConfigManager:
             
         Returns:
             Dict[str, Any]: 更新后的配置
+            
+        Raises:
+            ValidationException: 当配置验证失败时
+            ConfigurationException: 当配置更新失败时
         """
-        try:
-            Logger.info(f"用户 {user_id} 更新RAG配置")
-            
-            # 获取当前配置
-            current_config = settings.RAG_CONFIG.copy()
-            
-            # 应用更新
-            for key, value in config_updates.items():
-                if key in current_config:
-                    current_config[key] = value
-                else:
-                    Logger.warning(f"忽略未知的配置项: {key}")
-            
-            # 验证更新后的配置
-            validated_config = self._validate_rag_config_update(current_config)
-            
-            # 更新缓存
-            self._config_cache["rag"] = validated_config
-            self._last_update["rag"] = datetime.now().isoformat()
-            
-            # 记录配置变更
-            await self._log_config_change(
+        self.log_operation("update_rag_config", user_id=user_id, details=config_updates)
+        
+        # 验证配置更新数据
+        self.validate_business_rule(
+            bool(config_updates), 
+            "配置更新数据不能为空"
+        )
+        
+        # 获取当前配置
+        current_config = settings.RAG_CONFIG.copy()
+        
+        # 应用更新
+        for key, value in config_updates.items():
+            if key in current_config:
+                # 验证配置值
+                self.validate_config_value(value)
+                current_config[key] = value
+            else:
+                Logger.warning(f"忽略未知的配置项: {key}")
+        
+        # 验证更新后的配置
+        validated_config = await self.safe_execute(
+            lambda: self._validate_rag_config_update(current_config),
+            "RAG配置验证失败",
+            "RAG_CONFIG_VALIDATION_ERROR"
+        )
+        
+        # 更新缓存
+        self._config_cache["rag"] = validated_config
+        self._last_update["rag"] = datetime.now().isoformat()
+        
+        # 记录配置变更
+        await self.safe_execute(
+            lambda: self._log_config_change(
                 config_type="rag",
                 old_config=settings.RAG_CONFIG,
                 new_config=validated_config,
                 user_id=user_id
-            )
-            
-            Logger.info("RAG配置更新成功")
-            return validated_config
-            
-        except Exception as e:
-            Logger.error(f"更新RAG配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"更新配置失败: {str(e)}"
-            )
+            ),
+            "RAG配置变更记录失败",
+            "RAG_CONFIG_LOG_ERROR"
+        )
+        
+        Logger.info("RAG配置更新成功")
+        return validated_config
     
     async def reset_rag_config(self, user_id: int) -> Dict[str, Any]:
         """重置RAG配置为默认值
@@ -229,37 +269,40 @@ class ConfigManager:
             
         Returns:
             Dict[str, Any]: 重置后的配置
+            
+        Raises:
+            ConfigurationException: 当配置重置失败时
         """
-        try:
-            Logger.info(f"用户 {user_id} 重置RAG配置")
-            
-            # 获取默认配置
-            default_config = validate_rag_config(settings)
-            
-            # 清除缓存
-            if "rag" in self._config_cache:
-                del self._config_cache["rag"]
-            
-            self._last_update["rag"] = datetime.now().isoformat()
-            
-            # 记录配置重置
-            await self._log_config_change(
+        self.log_operation("reset_rag_config", user_id=user_id)
+        
+        # 获取默认配置
+        default_config = await self.safe_execute(
+            lambda: validate_rag_config(settings),
+            "获取默认RAG配置失败",
+            "DEFAULT_RAG_CONFIG_ERROR"
+        )
+        
+        # 清除缓存
+        if "rag" in self._config_cache:
+            del self._config_cache["rag"]
+        
+        self._last_update["rag"] = datetime.now().isoformat()
+        
+        # 记录配置重置
+        await self.safe_execute(
+            lambda: self._log_config_change(
                 config_type="rag",
                 old_config=settings.RAG_CONFIG,
                 new_config=default_config,
                 user_id=user_id,
                 action="reset"
-            )
-            
-            Logger.info("RAG配置重置成功")
-            return default_config
-            
-        except Exception as e:
-            Logger.error(f"重置RAG配置失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"重置配置失败: {str(e)}"
-            )
+            ),
+            "RAG配置重置记录失败",
+            "RAG_CONFIG_RESET_LOG_ERROR"
+        )
+        
+        Logger.info("RAG配置重置成功")
+        return default_config
     
     async def get_config_history(
         self, 
@@ -274,30 +317,37 @@ class ConfigManager:
             
         Returns:
             List[Dict[str, Any]]: 配置变更历史
+            
+        Raises:
+            ValidationException: 当参数验证失败时
+            ConfigurationException: 当获取历史失败时
         """
-        try:
-            Logger.info(f"获取 {config_type} 配置变更历史")
-            
-            # 这里可以从数据库或日志文件中获取历史记录
-            # 目前返回模拟数据
-            history = [
-                {
-                    "timestamp": datetime.now().isoformat(),
-                    "user_id": 1,
-                    "action": "update",
-                    "changes": {"max_length": 50000},
-                    "version": "1.0.0"
-                }
-            ]
-            
-            return history[:limit]
-            
-        except Exception as e:
-            Logger.error(f"获取配置历史失败: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"获取配置历史失败: {str(e)}"
-            )
+        self.log_operation("get_config_history", details={"config_type": config_type, "limit": limit})
+        
+        # 验证参数
+        self.validate_business_rule(
+            config_type in ["prompt", "rag"],
+            f"不支持的配置类型: {config_type}"
+        )
+        
+        self.validate_business_rule(
+            1 <= limit <= 100,
+            "历史记录数量限制必须在1-100之间"
+        )
+        
+        # 这里可以从数据库或日志文件中获取历史记录
+        # 目前返回模拟数据
+        history = [
+            {
+                "timestamp": datetime.now().isoformat(),
+                "user_id": 1,
+                "action": "update",
+                "changes": {"max_length": 50000},
+                "version": "1.0.0"
+            }
+        ]
+        
+        return history[:limit]
     
     async def validate_config(
         self, 
@@ -312,10 +362,25 @@ class ConfigManager:
             
         Returns:
             Dict[str, Any]: 验证结果
-        """
-        try:
-            Logger.info(f"验证 {config_type} 配置")
             
+        Raises:
+            ValidationException: 当配置类型不支持时
+        """
+        self.log_operation("validate_config", details={"config_type": config_type})
+        
+        # 验证配置类型
+        self.validate_business_rule(
+            config_type in ["prompt", "rag"],
+            f"不支持的配置类型: {config_type}"
+        )
+        
+        # 验证配置数据
+        self.validate_business_rule(
+            bool(config_data),
+            "配置数据不能为空"
+        )
+        
+        try:
             if config_type == "prompt":
                 validated = self._validate_prompt_config_update(config_data)
                 return {
@@ -330,12 +395,6 @@ class ConfigManager:
                     "valid": True,
                     "validated_config": validated,
                     "errors": [],
-                    "warnings": []
-                }
-            else:
-                return {
-                    "valid": False,
-                    "errors": [f"不支持的配置类型: {config_type}"],
                     "warnings": []
                 }
                 

@@ -1,4 +1,4 @@
-from typing import Any, Optional, Dict, Union, Callable, TypeVar, Generic
+from typing import Any, Optional, Dict, Union, Callable, TypeVar, Generic, List
 from functools import wraps
 from fastapi.responses import JSONResponse, Response
 from fastapi import status
@@ -24,6 +24,91 @@ class ResponseModel(CustomBaseModel, Generic[T]):
             }
         }
     )
+    
+    @classmethod
+    def create_success(
+        cls,
+        data: Optional[T] = None,
+        message: str = "操作成功",
+        code: int = status.HTTP_200_OK
+    ) -> Dict[str, Any]:
+        """创建成功响应数据
+        
+        Args:
+            data: 响应数据
+            message: 响应消息
+            code: HTTP状态码
+            
+        Returns:
+            Dict[str, Any]: 符合ResponseModel格式的字典
+        """
+        return {
+            "success": True,
+            "code": code,
+            "message": message,
+            "data": data
+        }
+    
+    @classmethod
+    def create_error(
+        cls,
+        message: str,
+        code: int = status.HTTP_400_BAD_REQUEST,
+        data: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """创建错误响应数据
+        
+        Args:
+            message: 错误消息
+            code: HTTP状态码
+            data: 额外的错误数据
+            
+        Returns:
+            Dict[str, Any]: 符合ResponseModel格式的字典
+        """
+        return {
+            "success": False,
+            "code": code,
+            "message": message,
+            "data": data
+        }
+    
+    @classmethod
+    def create_pagination(
+        cls,
+        items: List[Any],
+        total: int,
+        page: int,
+        page_size: int,
+        message: str = "获取列表成功",
+        code: int = status.HTTP_200_OK
+    ) -> Dict[str, Any]:
+        """创建分页响应数据
+        
+        Args:
+            items: 数据项列表
+            total: 总数量
+            page: 当前页码
+            page_size: 每页大小
+            message: 响应消息
+            code: HTTP状态码
+            
+        Returns:
+            Dict[str, Any]: 符合分页响应格式的字典
+        """
+        return {
+            "success": True,
+            "code": code,
+            "message": message,
+            "data": {
+                "items": items,
+                "pagination": {
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size
+                }
+            }
+        }
 
 class PaginationModel(BaseModel):
     """分页数据模型"""
@@ -31,16 +116,14 @@ class PaginationModel(BaseModel):
     page: int
     page_size: int
 
-class PaginationResponseModel(ResponseModel[T], Generic[T]):
+class PaginationData(BaseModel, Generic[T]):
+    """分页数据结构"""
+    items: List[T]
+    pagination: PaginationModel
+
+class PaginationResponseModel(ResponseModel[PaginationData[T]], Generic[T]):
     """分页响应模型"""
-    data: Optional[Dict[str, Any]] = {
-        "items": [],
-        "pagination": {
-            "total": 0,
-            "page": 1,
-            "page_size": 10
-        }
-    }
+    data: Optional[PaginationData[T]] = None
 
 class APIResponse:
     """统一的API响应格式封装"""
