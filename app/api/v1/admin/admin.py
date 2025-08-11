@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
-from app.core.response import APIResponse
 from app.schemas.admin import AdminRegister
 from app.models.user import User
 from app.core.config import settings
@@ -16,6 +15,21 @@ from app.schemas.user import (
 )
 from app.services.user import UserService
 from app.core.decorators import admin_required
+
+# 导入新的异常系统和响应工具
+from app.core.exceptions_new import (
+    ForbiddenError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+    DatabaseError,
+    SystemError,
+    BusinessError
+)
+from app.core.response_utils import (
+    success_response,
+    created_response,
+    pagination_response
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -33,62 +47,47 @@ async def register_admin(
         db (AsyncSession): 数据库会话对象
 
     Returns:
-        APIResponse: 包含注册成功信息的响应对象
+        Dict[str, Any]: 包含注册成功信息的响应数据
 
     Raises:
-        HTTPException: 当注册码无效或邮箱已存在时抛出相应错误
+        ForbiddenError: 当注册码无效时抛出
+        ResourceConflictError: 当邮箱已存在时抛出
+        DatabaseError: 当数据库操作失败时抛出
+        SystemError: 当系统内部错误时抛出
     """
+    # 验证注册码
+    if admin_data.register_code != settings.ADMIN_REGISTER_CODE:
+        raise ForbiddenError("注册码无效")
+
+    # 检查邮箱是否已存在
+    stmt = select(User).where(User.email == admin_data.email)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none():
+        raise ResourceConflictError("邮箱已被注册")
+
+    # 创建管理员用户
+    user = User(
+        email=admin_data.email,
+        hashed_password=get_password_hash(admin_data.password),
+        is_admin=True,
+    )
+    
     try:
-        # 验证注册码
-        if admin_data.register_code != settings.ADMIN_REGISTER_CODE:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid register code"
-            )
-
-        # 检查邮箱是否已存在
-        stmt = select(User).where(User.email == admin_data.email)
-        result = await db.execute(stmt)
-        if result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-
-        # 创建管理员用户
-        user = User(
-            email=admin_data.email,
-            hashed_password=get_password_hash(admin_data.password),
-            is_admin=True,
-        )
-        
-        try:
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-        except Exception as e:
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error: {str(e)}"
-            )
-
-        return APIResponse.success(
-            message="Admin user created successfully",
-            data={
-                "id": user.id,
-                "email": user.email,
-                "is_admin": user.is_admin
-            }
-        )
-        
-    except HTTPException as he:
-        raise he
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration failed: {str(e)}"
-        )
+        await db.rollback()
+        raise DatabaseError("用户创建失败", original_exception=e)
+
+    return created_response(
+        message="管理员用户创建成功",
+        data={
+            "id": user.id,
+            "email": user.email,
+            "is_admin": user.is_admin
+        }
+    )
 
 @router.post("/users", dependencies=[Depends(get_current_admin_user)])
 async def create_user(
@@ -107,13 +106,13 @@ async def create_user(
         current_user: 当前登录的管理员用户
 
     Returns:
-        APIResponse: 包含创建成功的用户信息的响应对象
+        Dict[str, Any]: 包含创建成功的用户信息的响应数据
     """
     user_service = UserService(db)
     result = await user_service.create(user_data, current_user.id)
     # 将SQLAlchemy模型转换为Pydantic模型
     response_data = UserResponse.model_validate(result)
-    return APIResponse.success(data=response_data)
+    return created_response(data=response_data, message="用户创建成功")
 
 @router.get("/users", dependencies=[Depends(get_current_admin_user)])
 async def list_users(
@@ -133,12 +132,12 @@ async def list_users(
         current_user: 当前登录的管理员用户
 
     Returns:
-        APIResponse: 包含用户列表和分页信息的响应对象
+        Dict[str, Any]: 包含用户列表和分页信息的响应数据
     """
     user_service = UserService(db)
     users, total = await user_service.get_users(page, page_size, current_user.id)
     
-    return APIResponse.pagination(
+    return pagination_response(
         items=users,
         total=total,
         page=page,
@@ -162,19 +161,18 @@ async def admin_change_user_password(
         db: 数据库会话
     
     Returns:
-        APIResponse: 修改结果
+        Dict[str, Any]: 修改结果的响应数据
         
     Raises:
-        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+        ResourceNotFoundError: 当用户不存在时抛出
+        BusinessError: 当密码修改失败时抛出
     """
     user_service = UserService(db)
-    try:
-        success = await user_service.admin_change_user_password(user_id, password_in.new_password)
-        if success:
-            return APIResponse.success(message="Password updated successfully")
-        return APIResponse.error(code=400, message="Failed to update password")
-    except Exception as e:
-        return APIResponse.error(code=400, message=str(e))
+    success = await user_service.admin_change_user_password(user_id, password_in.new_password)
+    if not success:
+        raise BusinessError("密码修改失败")
+    
+    return success_response(message="密码修改成功")
 
 @router.put("/users/{user_id}/status", dependencies=[Depends(get_current_admin_user)])
 async def update_user_status(
@@ -194,22 +192,21 @@ async def update_user_status(
         db (AsyncSession): 数据库会话
 
     Returns:
-        APIResponse: 更新结果
+        Dict[str, Any]: 更新结果的响应数据
         
     Raises:
-        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+        ResourceNotFoundError: 当用户不存在时抛出
+        BusinessError: 当操作失败时抛出
     """
     user_service = UserService(db)
-    try:
-        user = await user_service.update_user_status(user_id, status_update.is_active)
-        if user:
-            return APIResponse.success(
-                message="User status updated successfully",
-                data={"id": user.id, "is_active": user.is_active}
-            )
-        return APIResponse.error(code=404, message="User not found")
-    except Exception as e:
-        return APIResponse.error(code=400, message=str(e))
+    user = await user_service.update_user_status(user_id, status_update.is_active)
+    if not user:
+        raise ResourceNotFoundError("用户", user_id)
+    
+    return success_response(
+        message="用户状态更新成功",
+        data={"id": user.id, "is_active": user.is_active}
+    )
 
 @router.post("/users/{user_id}/reset-keys", dependencies=[Depends(get_current_admin_user)])
 async def reset_user_keys(
@@ -227,19 +224,18 @@ async def reset_user_keys(
         db (AsyncSession): 数据库会话
 
     Returns:
-        APIResponse: 重置结果
+        Dict[str, Any]: 重置结果的响应数据
         
     Raises:
-        HTTPException: 当用户不存在或操作失败时抛出相应的错误
+        ResourceNotFoundError: 当用户不存在时抛出
+        BusinessError: 当操作失败时抛出
     """
     user_service = UserService(db)
-    try:
-        user = await user_service.reset_user_keys(user_id)
-        if user:
-            return APIResponse.success(
-                message="User keys reset successfully",
-                data=UserResponse.model_validate(user)
-            )
-        return APIResponse.error(code=404, message="User not found")
-    except Exception as e:
-        return APIResponse.error(code=400, message=str(e)) 
+    user = await user_service.reset_user_keys(user_id)
+    if not user:
+        raise ResourceNotFoundError("用户", user_id)
+    
+    return success_response(
+        message="用户密钥重置成功",
+        data=UserResponse.model_validate(user)
+    ) 

@@ -1,3 +1,29 @@
+"""
+⚠️ 重要迁移通知：
+
+此文件中的 APIResponse 类和相关方法已被标记为废弃。
+请迁移到新的异常驱动响应系统：
+
+新系统导入：
+from app.core.response_utils import success_response, pagination_response
+from app.core.exceptions_new import ResourceNotFoundError, BusinessError, etc.
+
+迁移示例：
+
+旧代码：
+    try:
+        result = some_operation()
+        return APIResponse.success(data=result)
+    except Exception as e:
+        return APIResponse.error(message=str(e))
+
+新代码：
+    result = some_operation()  # 异常会被全局处理器捕获
+    return success_response(data=result)
+
+详细迁移指南请参考：.kiro/specs/api-response-system-refactor/
+"""
+
 from typing import Any, Optional, Dict, Union, Callable, TypeVar, Generic, List
 from functools import wraps
 from fastapi.responses import JSONResponse, Response
@@ -128,12 +154,18 @@ class PaginationResponseModel(ResponseModel[PaginationData[T]], Generic[T]):
 class APIResponse:
     """统一的API响应格式封装
     
-    注意：此类已被标记为废弃，建议使用新的响应机制：
-    - 使用 ResponseModel.create_success() 替代 APIResponse.success()
-    - 使用 ResponseModel.create_error() 替代 APIResponse.error()
-    - 使用 ResponseModel.create_pagination() 替代 APIResponse.pagination()
+    ⚠️ 废弃警告：此类已被标记为废弃，建议使用新的异常驱动响应机制：
     
-    此类将在未来版本中移除，目前保留用于向后兼容。
+    新的推荐用法：
+    - 使用 success_response() 替代 APIResponse.success()
+    - 使用自定义异常替代 APIResponse.error()
+    - 使用 pagination_response() 替代 APIResponse.pagination()
+    
+    导入新的工具：
+    from app.core.response_utils import success_response, pagination_response
+    from app.core.exceptions_new import ResourceNotFoundError, BusinessError, etc.
+    
+    此类将在v2.0版本中移除，目前保留用于向后兼容。
     """
     
     @staticmethod
@@ -157,11 +189,15 @@ class APIResponse:
     ) -> JSONResponse:
         """成功响应
         
-        警告：此方法已废弃，请使用 ResponseModel.create_success() 替代
+        ⚠️ 废弃警告：此方法已废弃，请使用新的响应工具替代
+        
+        推荐用法：
+        from app.core.response_utils import success_response
+        return success_response(data=data, message=message)
         """
         import warnings
         warnings.warn(
-            "APIResponse.success() 已废弃，请使用 ResponseModel.create_success() 替代",
+            "APIResponse.success() 已废弃，请使用 success_response() 替代",
             DeprecationWarning,
             stacklevel=2
         )
@@ -185,11 +221,15 @@ class APIResponse:
     ) -> JSONResponse:
         """错误响应
         
-        警告：此方法已废弃，请使用 ResponseModel.create_error() 或抛出自定义异常替代
+        ⚠️ 废弃警告：此方法已废弃，请使用自定义异常替代
+        
+        推荐用法：
+        from app.core.exceptions_new import BusinessError, ResourceNotFoundError
+        raise BusinessError(message)  # 替代 APIResponse.error()
         """
         import warnings
         warnings.warn(
-            "APIResponse.error() 已废弃，请使用 ResponseModel.create_error() 或抛出自定义异常替代",
+            "APIResponse.error() 已废弃，请抛出自定义异常替代",
             DeprecationWarning,
             stacklevel=2
         )
@@ -215,11 +255,15 @@ class APIResponse:
     ) -> JSONResponse:
         """分页数据响应
         
-        警告：此方法已废弃，请使用 ResponseModel.create_pagination() 替代
+        ⚠️ 废弃警告：此方法已废弃，请使用新的分页响应工具替代
+        
+        推荐用法：
+        from app.core.response_utils import pagination_response
+        return pagination_response(items=items, total=total, page=page, page_size=page_size)
         """
         import warnings
         warnings.warn(
-            "APIResponse.pagination() 已废弃，请使用 ResponseModel.create_pagination() 替代",
+            "APIResponse.pagination() 已废弃，请使用 pagination_response() 替代",
             DeprecationWarning,
             stacklevel=2
         )
@@ -253,11 +297,16 @@ def response_wrapper(
 ):
     """统一响应装饰器
     
-    警告：此装饰器已废弃，请移除装饰器并使用新的响应机制
+    ⚠️ 废弃警告：此装饰器已废弃，请移除装饰器并使用新的异常驱动机制
+    
+    推荐用法：
+    1. 移除 @response_wrapper 装饰器
+    2. 直接返回 success_response() 或抛出自定义异常
+    3. 可选择使用 @auto_response 装饰器（来自 response_utils）
     """
     import warnings
     warnings.warn(
-        "@response_wrapper 装饰器已废弃，请移除装饰器并使用新的响应机制",
+        "@response_wrapper 装饰器已废弃，请移除装饰器并使用新的异常驱动机制",
         DeprecationWarning,
         stacklevel=2
     )

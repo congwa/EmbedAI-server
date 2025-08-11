@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.services.chat import ChatService
@@ -8,13 +8,25 @@ from app.models.user import User
 from app.schemas.chat import ChatList
 from app.core.logger import Logger
 from sqlalchemy.orm import Session
-from app.core.response import APIResponse, ResponseModel
+from app.core.response import ResponseModel
 from app.models.enums import ChatMode, MessageType
 from app.schemas.chat import (
     ChatResponse,
     ChatMessageResponse,
     ChatMessageCreate,
     ChatListResponse
+)
+
+# 导入新的异常系统和响应工具
+from app.core.exceptions_new import (
+    ResourceNotFoundError,
+    ForbiddenError,
+    BusinessError,
+    SystemError
+)
+from app.core.response_utils import (
+    success_response,
+    pagination_response
 )
 
 # 创建管理员聊天路由
@@ -43,7 +55,7 @@ async def list_chats(
         include_inactive=include_inactive,
         all_chats=all_chats
     )
-    return APIResponse.success(data=ChatListResponse(items=chats, total=total))
+    return success_response(data=ChatListResponse(items=chats, total=total))
 
 @router.get("/{chat_id}", response_model=ResponseModel[ChatResponse])
 async def get_chat(
@@ -67,7 +79,7 @@ async def get_chat(
             message_ids=message_ids
         )
     
-    return APIResponse.success(data=chat)
+    return success_response(data=chat)
 
 @router.post("/{chat_id}/switch-mode", response_model=ResponseModel[ChatResponse])
 async def switch_chat_mode(
@@ -87,7 +99,7 @@ async def switch_chat_mode(
         admin_id=current_admin.id,
         mode=mode
     )
-    return APIResponse.success(data=chat)
+    return success_response(data=chat)
 
 
 @router.post("/{chat_id}/join", response_model=ResponseModel[ChatResponse])
@@ -99,7 +111,7 @@ async def join_chat(
     """管理员加入聊天"""
     chat_service = ChatService(db)
     chat = await chat_service.admin_join_chat(chat_id, current_admin.id)
-    return APIResponse.success(data=chat)
+    return success_response(data=chat)
 
 @router.post("/{chat_id}/leave", response_model=ResponseModel[ChatResponse])
 async def leave_chat(
@@ -110,7 +122,7 @@ async def leave_chat(
     """管理员离开聊天"""
     chat_service = ChatService(db)
     chat = await chat_service.admin_leave_chat(chat_id, current_admin.id)
-    return APIResponse.success(data=chat)
+    return success_response(data=chat)
 @router.post("/{chat_id}/messages", response_model=ResponseModel[ChatMessageResponse])
 async def send_admin_message(
     chat_id: int,
@@ -128,11 +140,11 @@ async def send_admin_message(
     
     # 检查是否是人工模式
     if chat.chat_mode != ChatMode.HUMAN:
-        raise HTTPException(400, "当前不是人工服务模式")
+        raise BusinessError("当前不是人工服务模式")
         
     # 检查是否是当前会话的管理员
     if chat.current_admin_id != current_admin.id:
-        raise HTTPException(403, "您不是当前会话的服务人员")
+        raise ForbiddenError("您不是当前会话的服务人员")
     
     # 发送消息
     chat_message = await chat_service.send_message(
@@ -144,7 +156,7 @@ async def send_admin_message(
         sender_identity_id=current_admin.identity.id
     )
     
-    return APIResponse.success(data=chat_message)
+    return success_response(data=chat_message)
 
 @router.get("/{chat_id}/messages", response_model=ResponseModel)
 async def list_chat_messages(
@@ -166,7 +178,7 @@ async def list_chat_messages(
         page_size=page_size
     )
     
-    return APIResponse.success(data=messages_data)
+    return success_response(data=messages_data)
 
 @router.get("/users/{third_party_user_id}/stats", response_model=ResponseModel)
 async def get_user_chat_stats(
@@ -189,7 +201,7 @@ async def get_user_chat_stats(
     total_chats = len(chats)
     total_messages = sum(len(chat.messages) for chat in chats if hasattr(chat, 'messages') and chat.messages)
     
-    return APIResponse.success(data={
+    return success_response(data={
         "third_party_user_id": third_party_user_id,
         "total_chats": total_chats,
         "total_messages": total_messages,
@@ -209,10 +221,7 @@ async def get_knowledge_base_chat_stats(
     Logger.info(f"Admin {current_admin.email} requesting chat stats for knowledge base {kb_id}")
     
     # TODO: 实现知识库聊天统计功能
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="知识库聊天统计功能尚未实现"
-    )
+    raise SystemError("知识库聊天统计功能尚未实现")
 
 @router.post("/{chat_id}/restore", response_model=ResponseModel)
 async def restore_chat(
@@ -231,7 +240,7 @@ async def restore_chat(
         chat_id=chat_id,
         admin_user_id=current_admin.id
     )
-    return APIResponse.success(data={"message": "聊天会话已恢复", "chat_id": chat.id})
+    return success_response(data={"message": "聊天会话已恢复", "chat_id": chat.id})
 
 @router.get("/deleted", response_model=ResponseModel[ChatList])
 async def list_deleted_chats(
@@ -263,12 +272,9 @@ async def list_deleted_chats(
         chats = [chat for chat in chats if chat.is_deleted]
     else:
         # TODO: 实现获取所有已删除聊天会话的功能
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="获取所有已删除聊天会话功能尚未实现"
-        )
+        raise SystemError("获取所有已删除聊天会话功能尚未实现")
     
-    return APIResponse.success(data=ChatList(
+    return success_response(data=ChatList(
         total=len(chats),
         items=chats
     )) 

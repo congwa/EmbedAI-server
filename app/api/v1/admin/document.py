@@ -1,7 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Path, UploadFile, File
 from sqlalchemy.orm import Session
-from app.core.response import APIResponse
 from app.models.user import User
 from app.models.database import get_db
 from app.services.document import DocumentService
@@ -9,6 +8,19 @@ from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentPaginat
 from app.services.auth import get_current_admin_user, get_current_user
 from app.schemas.document import DocumentType
 from datetime import datetime
+
+# 导入新的异常系统和响应工具
+from app.core.exceptions_new import (
+    ResourceNotFoundError,
+    BusinessError,
+    SystemError,
+    ValidationError
+)
+from app.core.response_utils import (
+    success_response,
+    created_response,
+    no_content_response
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -33,7 +45,10 @@ async def create_text_document(
     """
     document_service = DocumentService(db)
     doc = await document_service.create(doc_in, kb_id, current_user.id)
-    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+    return created_response(
+        data=DocumentResponse.model_validate(doc),
+        message="文档创建成功"
+    )
 
 @router.post("/knowledge-bases/{kb_id}/documents/upload", summary="上传文件创建文档")
 async def upload_document(
@@ -45,7 +60,10 @@ async def upload_document(
     """上传文件创建新文档"""
     document_service = DocumentService(db)
     doc = await document_service.create_from_upload(kb_id, current_user.id, file)
-    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+    return created_response(
+        data=DocumentResponse.model_validate(doc),
+        message="文档上传成功"
+    )
 
 @router.get("/knowledge-bases/{kb_id}/documents")
 async def get_documents(
@@ -89,7 +107,10 @@ async def get_documents(
         "items": [DocumentResponse.model_validate(doc) for doc in docs["items"]]
     }
     
-    return APIResponse.success(data=DocumentPagination.model_validate(pagination_data))
+    return success_response(
+        data=DocumentPagination.model_validate(pagination_data),
+        message="获取文档列表成功"
+    )
 
 @router.put("/documents/{doc_id}")
 async def update_document(
@@ -110,7 +131,10 @@ async def update_document(
     """
     document_service = DocumentService(db)
     doc = await document_service.update(doc_id, doc_in)
-    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+    return success_response(
+        data=DocumentResponse.model_validate(doc),
+        message="文档更新成功"
+    )
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(
@@ -129,7 +153,7 @@ async def delete_document(
     """
     document_service = DocumentService(db)
     await document_service.delete(doc_id)
-    return APIResponse.success(data={"message": "文档已删除"})
+    return success_response(message="文档删除成功")
 
 @router.post("/documents/{doc_id}/reprocess", summary="重新处理文档")
 async def reprocess_document(
@@ -144,7 +168,10 @@ async def reprocess_document(
     """
     document_service = DocumentService(db)
     doc = await document_service.reprocess_document(doc_id, current_user.id)
-    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+    return success_response(
+        data=DocumentResponse.model_validate(doc),
+        message="文档重新处理成功"
+    )
 
 
 @router.get("/documents/{doc_id}")
@@ -165,4 +192,9 @@ async def get_document(
     """
     document_service = DocumentService(db)
     doc = await document_service.get(doc_id)
-    return APIResponse.success(data=DocumentResponse.model_validate(doc))
+    if not doc:
+        raise ResourceNotFoundError("文档", doc_id)
+    return success_response(
+        data=DocumentResponse.model_validate(doc),
+        message="获取文档详情成功"
+    )

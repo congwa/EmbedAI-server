@@ -12,6 +12,8 @@ from app.core.exceptions import (
     validation_exception_handler,
     generic_exception_handler
 )
+# 导入新的异常处理系统
+from app.core.exception_handlers import register_exception_handlers
 from app.core.middleware import LoggingMiddleware, RequestValidationMiddleware, TraceMiddleware
 from app.middleware import RAGLoggingMiddleware
 from app.middleware.context_middleware import ContextMiddleware
@@ -47,21 +49,25 @@ app = FastAPI(
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("EmbedAi-Server")
 
-# 注册异常处理器
+# 注册新的异常处理器系统
+register_exception_handlers(app)
+
+# 保留旧的异常处理器以确保向后兼容性
+# 这些处理器将在新系统稳定后逐步移除
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 app.add_exception_handler(ValidationError, validation_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
-# 注册新的API异常处理器
+# 注册旧版API异常处理器（向后兼容）
 @app.exception_handler(APIException)
-async def api_exception_handler(request: Request, exc: APIException):
-    """处理自定义API异常"""
+async def legacy_api_exception_handler(request: Request, exc: APIException):
+    """处理旧版自定义API异常（向后兼容）"""
     from app.core.response import ResponseModel
     
     Logger.error(
-        f"API异常: {exc.message}",
+        f"旧版API异常: {exc.message}",
         request_path=request.url.path,
         request_method=request.method,
         error_code=exc.code,
@@ -79,28 +85,6 @@ async def api_exception_handler(request: Request, exc: APIException):
         status_code=exc.code,
         content=response_data.model_dump(),
         headers=exc.headers
-    )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # 获取当前请求的trace_id
-    trace_id = request.headers.get("X-Trace-ID", "无追踪ID")
-    
-    Logger.error(
-        f"发生未处理的错误: {exc}",
-        request_path=request.url.path,
-        request_method=request.method,
-        trace_id=trace_id,
-        error=str(exc)
-    )
-    
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "服务器内部错误",
-            "message": str(exc),
-            "trace_id": trace_id
-        },
     )
 
 # 添加中间件
