@@ -73,7 +73,10 @@ class ChatAIService:
         user_query: str,
         kb_id: int,
         user_context: Optional[UserContext] = None,
-        top_k: int = 5
+        top_k: int = 5,
+        search_method: str = "hybrid_search",
+        use_rerank: bool = True,
+        rerank_mode: str = "weighted_score"
     ) -> Dict[str, Any]:
         """生成AI回复
         
@@ -83,6 +86,9 @@ class ChatAIService:
             kb_id: 知识库ID
             user_context: 用户上下文信息
             top_k: 返回结果数量
+            search_method: 搜索方法 (semantic_search, keyword_search, hybrid_search)
+            use_rerank: 是否使用重排序
+            rerank_mode: 重排序模式
             
         Returns:
             Dict[str, Any]: 包含回复内容和元数据的字典
@@ -99,6 +105,9 @@ class ChatAIService:
                 user_context=user_context,
                 query=formatted_query,
                 top_k=top_k,
+                method=search_method,
+                use_rerank=use_rerank,
+                rerank_mode=rerank_mode,
                 skip_permission_check=True  # 系统查询跳过权限检查
             )
             
@@ -113,6 +122,9 @@ class ChatAIService:
                 "kb_id": kb_id,
                 "query": formatted_query,
                 "top_k": top_k,
+                "search_method": search_method,
+                "use_rerank": use_rerank,
+                "rerank_mode": rerank_mode,
                 "results": query_result["results"],
                 "generated_at": datetime.now()
             }

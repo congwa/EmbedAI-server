@@ -729,6 +729,9 @@ class KnowledgeBaseService:
         user_context: UserContext,
         query: str,
         top_k: int = 5,
+        method: str = RetrievalMethod.HYBRID_SEARCH,
+        use_rerank: bool = True,
+        rerank_mode: str = RerankMode.WEIGHTED_SCORE,
         skip_permission_check: bool = False,
     ) -> dict:
         """查询知识库
@@ -738,6 +741,9 @@ class KnowledgeBaseService:
             user_context: 用户上下文信息
             query: 查询内容
             top_k: 返回结果数量
+            method: 检索方法
+            use_rerank: 是否使用重排序
+            rerank_mode: 重排序模式
             skip_permission_check: 是否跳过权限检查
 
         Returns:
@@ -751,9 +757,10 @@ class KnowledgeBaseService:
             kb_id=kb_id,
             user_context=user_context,
             query=query,
-            method=RetrievalMethod.HYBRID_SEARCH,  # 默认使用混合搜索
+            method=method,
             top_k=top_k,
-            use_rerank=True,  # 默认使用重排序
+            use_rerank=use_rerank,
+            rerank_mode=rerank_mode,
             skip_permission_check=skip_permission_check,
         )
 

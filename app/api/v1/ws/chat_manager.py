@@ -105,20 +105,31 @@ class ChatWebSocketManager:
         if not content:
             await self._send_error_response("INVALID_PAYLOAD", "Message content is missing.", request_id)
             return
+            
+        # 获取搜索模式参数，默认为混合搜索
+        search_config = payload.get("search_config", {})
+        search_method = search_config.get("method", "hybrid_search")
+        top_k = max(1, min(10, search_config.get("top_k", 5)))  # 限制范围1-10
+        use_rerank = search_config.get("use_rerank", True)
+        rerank_mode = search_config.get("rerank_mode", "weighted_score")
 
         message = await self.chat_service.add_message(
             chat_id=self.chat_id,
             content=content,
             message_type=MessageType.USER if self.user_context.user_type == "third_party" else MessageType.ADMIN,
             sender_id=self.user_context.user_id,
-            doc_metadata={"client_id": self.user_context.client_id, "trace_id": self.trace_id}
+            doc_metadata={
+                "client_id": self.user_context.client_id, 
+                "trace_id": self.trace_id,
+                "search_config": search_config
+            }
         )
 
         await self._broadcast_event("message.new", {"message": json.loads(message.to_json())}, exclude_self=False)
 
         chat = await self.chat_service.get_chat(self.chat_id)
         if chat.chat_mode == ChatMode.AI and self.user_context.user_type == "third_party":
-            await self._handle_ai_response(content)
+            await self._handle_ai_response(content, search_method, top_k, use_rerank, rerank_mode)
 
     async def _handle_history_request(self, payload: Dict[str, Any], request_id: Optional[str]):
         """处理消息历史记录请求。"""
@@ -178,7 +189,7 @@ class ChatWebSocketManager:
                 exclude_self=False  # 通知所有客户端，包括发送者
             )
 
-    async def _handle_ai_response(self, user_query: str):
+    async def _handle_ai_response(self, user_query: str, search_method: str = "hybrid_search", top_k: int = 5, use_rerank: bool = True, rerank_mode: str = "weighted_score"):
         """生成并广播AI响应。"""
         try:
             chat = await self.chat_service.get_chat(self.chat_id)
@@ -186,14 +197,28 @@ class ChatWebSocketManager:
                 chat_id=self.chat_id,
                 user_query=user_query,
                 kb_id=chat.knowledge_base_id,
-                user_context=self.user_context
+                user_context=self.user_context,
+                top_k=top_k,
+                search_method=search_method,
+                use_rerank=use_rerank,
+                rerank_mode=rerank_mode
             )
 
             ai_message = await self.chat_service.add_message(
                 chat_id=self.chat_id,
                 content=ai_response["content"],
                 message_type=MessageType.ASSISTANT,
-                doc_metadata={**ai_response["metadata"], "is_ai": True, "trace_id": self.trace_id}
+                doc_metadata={
+                    **ai_response["metadata"], 
+                    "is_ai": True, 
+                    "trace_id": self.trace_id,
+                    "search_config": {
+                        "method": search_method,
+                        "top_k": top_k,
+                        "use_rerank": use_rerank,
+                        "rerank_mode": rerank_mode
+                    }
+                }
             )
             await self._broadcast_event("message.new", {"message": json.loads(ai_message.to_json())}, exclude_self=False)
         except Exception as e:
