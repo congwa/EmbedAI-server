@@ -1660,7 +1660,7 @@ class KnowledgeBaseService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"获取模板建议失败: {str(e)}"
             )    asy
-nc def set_default_prompt_template(
+    async def set_default_prompt_template(
         self,
         kb_id: int,
         user_id: int,
