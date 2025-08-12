@@ -1,0 +1,268 @@
+# 模块开发规范与最佳实践
+
+## 🎯 模块开发原则
+
+### 1. 分层架构严格执行
+```
+API Layer (app/api/v1/) → Service Layer (app/services/) → Model Layer (app/models/)
+```
+
+### 2. 模块职责划分
+
+#### API层职责
+- **路由定义**: 定义HTTP端点
+- **参数验证**: 使用Pydantic Schema验证输入
+- **权限检查**: 验证用户权限
+- **响应格式化**: 统一响应格式
+
+#### Service层职责  
+- **业务逻辑**: 实现核心业务逻辑
+- **数据操作**: 通过Model层操作数据
+- **外部服务**: 调用第三方API服务
+- **缓存管理**: 管理Redis缓存
+
+#### Model层职责
+- **数据定义**: 定义数据库表结构
+- **关系映射**: 定义模型间关系
+- **查询优化**: 优化数据库查询
+
+## 📁 文件组织规范
+
+### API文件结构
+```python
+# app/api/v1/admin/example.py
+from fastapi import APIRouter, Depends, HTTPException
+from app.services.example import ExampleService
+from app.schemas.example import ExampleCreate, ExampleResponse
+from app.core.auth import get_current_admin_user
+
+router = APIRouter()
+
+@router.post("/", response_model=ExampleResponse)
+async def create_example(
+    data: ExampleCreate,
+    current_user = Depends(get_current_admin_user),
+    service: ExampleService = Depends()
+):
+    return await service.create(data, current_user)
+```
+
+### Service文件结构
+```python
+# app/services/example.py
+from app.services.base import BaseService
+from app.models.example import Example
+from app.schemas.example import ExampleCreate
+from app.core.logger import Logger
+
+class ExampleService(BaseService):
+    def __init__(self):
+        super().__init__(Example)
+    
+    async def create(self, data: ExampleCreate, user):
+        try:
+            # 业务逻辑实现
+            instance = await self.create_instance(data, user)
+            Logger.info(f"Created example: {instance.id}")
+            return instance
+        except Exception as e:
+            Logger.error(f"Failed to create example: {str(e)}")
+            raise
+```
+
+### Model文件结构
+```python
+# app/models/example.py
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from app.models.database import Base
+from datetime import datetime
+
+class Example(Base):
+    __tablename__ = "examples"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    # 关系定义
+    user = relationship("User", back_populates="examples")
+```
+
+## 🔧 开发模式
+
+### 1. 依赖注入模式
+```python
+# 使用FastAPI的依赖注入系统
+from fastapi import Depends
+
+def get_example_service():
+    return ExampleService()
+
+@router.get("/")
+async def get_examples(service: ExampleService = Depends(get_example_service)):
+    return await service.get_all()
+```
+
+### 2. 工厂模式 (RAG模块)
+```python
+# app/rag/datasource/vector_factory.py
+class VectorFactory:
+    @staticmethod
+    def create_vector_store(store_type: str, config: dict):
+        if store_type == "chroma":
+            return ChromaVectorStore(config)
+        elif store_type == "qdrant":
+            return QdrantVectorStore(config)
+        else:
+            raise ValueError(f"Unsupported vector store type: {store_type}")
+```
+
+### 3. 策略模式 (检索方法)
+```python
+# app/rag/retrieval/retrieval_engine.py
+class RetrievalEngine:
+    def __init__(self, strategy: RetrievalStrategy):
+        self.strategy = strategy
+    
+    async def retrieve(self, query: str, **kwargs):
+        return await self.strategy.retrieve(query, **kwargs)
+```
+
+## 🛡️ 错误处理规范
+
+### 1. 统一异常处理
+```python
+# 使用自定义异常
+from app.core.exceptions import ValidationError, NotFoundError
+
+async def get_example(example_id: int):
+    example = await ExampleService().get_by_id(example_id)
+    if not example:
+        raise NotFoundError(f"Example {example_id} not found")
+    return example
+```
+
+### 2. 日志记录
+```python
+from app.core.logger import Logger
+
+async def create_example(data: ExampleCreate):
+    try:
+        Logger.info(f"Creating example: {data.name}")
+        result = await ExampleService().create(data)
+        Logger.info(f"Successfully created example: {result.id}")
+        return result
+    except Exception as e:
+        Logger.error(f"Failed to create example: {str(e)}")
+        raise
+```
+
+## ⚡ 性能优化规范
+
+### 1. 异步处理
+```python
+# 所有数据库操作必须异步
+async def get_examples():
+    return await ExampleService().get_all()
+
+# 批量操作
+async def create_examples_batch(data_list: List[ExampleCreate]):
+    return await ExampleService().create_batch(data_list)
+```
+
+### 2. 缓存策略
+```python
+from app.core.redis_manager import RedisManager
+
+class ExampleService(BaseService):
+    async def get_by_id(self, example_id: int):
+        # 先查缓存
+        cache_key = f"example:{example_id}"
+        cached = await RedisManager.get(cache_key)
+        if cached:
+            return cached
+        
+        # 查数据库
+        example = await super().get_by_id(example_id)
+        if example:
+            # 设置缓存
+            await RedisManager.set(cache_key, example, expire=3600)
+        return example
+```
+
+### 3. 数据库优化
+```python
+# 使用索引
+class Example(Base):
+    __tablename__ = "examples"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)  # 添加索引
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)  # 添加索引
+
+# 使用预加载
+async def get_examples_with_user():
+    return await ExampleService().get_all_with_relationship("user")
+```
+
+## 📝 代码质量要求
+
+### 1. 类型注解
+```python
+from typing import List, Optional, Dict, Any
+
+async def get_examples(
+    page: int = 1,
+    size: int = 10,
+    filters: Optional[Dict[str, Any]] = None
+) -> List[Example]:
+    return await ExampleService().get_paginated(page, size, filters)
+```
+
+### 2. 文档字符串
+```python
+async def create_example(data: ExampleCreate, user: User) -> Example:
+    """
+    创建新的示例记录
+    
+    Args:
+        data: 示例创建数据
+        user: 当前用户
+        
+    Returns:
+        Example: 创建的示例实例
+        
+    Raises:
+        ValidationError: 数据验证失败
+        PermissionError: 权限不足
+    """
+    return await ExampleService().create(data, user)
+```
+
+### 3. 单元测试
+```python
+# tests/test_example_service.py
+import pytest
+from app.services.example import ExampleService
+
+@pytest.mark.asyncio
+async def test_create_example():
+    service = ExampleService()
+    data = ExampleCreate(name="Test Example")
+    result = await service.create(data)
+    assert result.name == "Test Example"
+```
+
+## 🚨 常见错误避免
+
+1. **避免循环导入**: 使用依赖注入而不是直接导入
+2. **避免N+1查询**: 使用预加载和批量查询
+3. **避免硬编码**: 使用配置文件管理常量
+4. **避免忽略异常**: 始终处理异常并记录日志
+5. **避免同步阻塞**: 使用异步操作处理I/O密集型任务
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,250 @@
+# EmbedAI Server 开发工作流程
+
+## 🎯 开发流程总览
+
+### 1. 功能开发流程
+```
+需求分析 → 架构设计 → 模块开发 → 测试验证 → 代码审查 → 部署上线
+```
+
+### 2. 代码修改流程
+```
+分析现有架构 → 确定修改范围 → 设计封装方案 → 实施修改 → 测试验证 → 文档更新
+```
+
+## 📋 开发前准备
+
+### 1. 架构分析阶段
+- **分析现有模块**: 查看 [app/](mdc:app/) 目录结构
+- **理解分层架构**: API → Service → Model
+- **识别依赖关系**: 确定模块间的依赖
+- **评估影响范围**: 分析修改对现有功能的影响
+
+### 2. 设计阶段
+- **确定功能归属**: 
+  - 管理端功能 → [app/api/v1/admin/](mdc:app/api/v1/admin/)
+  - 客户端功能 → [app/api/v1/client/](mdc:app/api/v1/client/)
+  - 聊天功能 → [app/api/v1/chat/](mdc:app/api/v1/chat/)
+  - WebSocket功能 → [app/api/v1/ws/](mdc:app/api/v1/ws/)
+- **设计数据模型**: 在 [app/models/](mdc:app/models/) 中定义
+- **设计业务逻辑**: 在 [app/services/](mdc:app/services/) 中实现
+- **设计API接口**: 在对应的API模块中实现
+
+## 🔧 开发实施步骤
+
+### 1. 配置管理
+```python
+# 在 [app/core/config.py](mdc:app/core/config.py) 中添加配置项
+class Settings(BaseSettings):
+    # 新功能配置
+    NEW_FEATURE_ENABLED: bool = True
+    NEW_FEATURE_TIMEOUT: int = 30
+```
+
+### 2. 数据模型开发
+```python
+# 在 [app/models/](mdc:app/models/) 中创建模型
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from app.models.database import Base
+
+class NewModel(Base):
+    __tablename__ = "new_models"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    # 其他字段...
+```
+
+### 3. Schema定义
+```python
+# 在 [app/schemas/](mdc:app/schemas/) 中定义Schema
+from pydantic import BaseModel
+from typing import Optional
+
+class NewModelCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class NewModelResponse(BaseModel):
+    id: int
+    name: str
+    # 其他字段...
+```
+
+### 4. 服务层开发
+```python
+# 在 [app/services/](mdc:app/services/) 中实现业务逻辑
+from app.services.base import BaseService
+from app.models.new_model import NewModel
+
+class NewModelService(BaseService):
+    def __init__(self):
+        super().__init__(NewModel)
+    
+    async def create_new_model(self, data, user):
+        # 业务逻辑实现
+        pass
+```
+
+### 5. API层开发
+```python
+# 在对应的API模块中实现接口
+from fastapi import APIRouter, Depends
+from app.services.new_model import NewModelService
+
+router = APIRouter()
+
+@router.post("/new-models/")
+async def create_new_model(
+    data: NewModelCreate,
+    service: NewModelService = Depends()
+):
+    return await service.create_new_model(data)
+```
+
+### 6. 路由注册
+```python
+# 在 [app/api/v1/__init__.py](mdc:app/api/v1/__init__.py) 中注册路由
+from .admin import new_model_router
+
+api_router.include_router(
+    new_model_router,
+    prefix="/new-models",
+    tags=["new-models"]
+)
+```
+
+## 🧪 测试验证
+
+### 1. 单元测试
+```python
+# 在 tests/unit/ 中编写单元测试
+import pytest
+from app.services.new_model import NewModelService
+
+class TestNewModelService:
+    @pytest.mark.asyncio
+    async def test_create_new_model(self):
+        # 测试实现
+        pass
+```
+
+### 2. 集成测试
+```python
+# 在 tests/integration/ 中编写集成测试
+def test_new_model_api():
+    # API集成测试
+    pass
+```
+
+### 3. 运行测试
+```bash
+# 运行所有测试
+pytest
+
+# 运行特定测试
+pytest tests/unit/test_new_model.py
+
+# 运行带覆盖率测试
+pytest --cov=app --cov-report=html
+```
+
+## 📝 文档更新
+
+### 1. API文档
+- 更新 [docs/api/](mdc:docs/api/) 中的API文档
+- 确保OpenAPI文档自动生成正确
+
+### 2. 代码注释
+```python
+async def create_new_model(data: NewModelCreate, user: User) -> NewModel:
+    """
+    创建新的模型实例
+    
+    Args:
+        data: 模型创建数据
+        user: 当前用户
+        
+    Returns:
+        NewModel: 创建的模型实例
+        
+    Raises:
+        ValidationError: 数据验证失败
+        PermissionError: 权限不足
+    """
+    pass
+```
+
+### 3. 变更日志
+- 更新 [CHANGELOG.md](mdc:CHANGELOG.md) 记录变更
+- 记录新功能、修复和改进
+
+## 🔍 代码审查清单
+
+### 1. 架构合规性
+- [ ] 遵循分层架构 (API → Service → Model)
+- [ ] 使用依赖注入模式
+- [ ] 避免循环导入
+- [ ] 模块职责清晰
+
+### 2. 代码质量
+- [ ] 类型注解完整
+- [ ] 异常处理完善
+- [ ] 日志记录充分
+- [ ] 代码注释清晰
+
+## 🚨 常见问题解决
+
+### 1. 循环导入问题
+```python
+# 错误示例
+from app.services.user import UserService
+from app.models.user import User
+
+# 正确示例 - 使用依赖注入
+from fastapi import Depends
+
+def get_user_service():
+    return UserService()
+
+@router.get("/")
+async def get_users(service = Depends(get_user_service)):
+    return await service.get_all()
+```
+
+### 2. 异步操作问题
+```python
+# 错误示例
+def sync_function():
+    result = database.query.all()  # 同步操作
+
+# 正确示例
+async def async_function():
+    result = await database.execute(select(Model))
+    return result.scalars().all()
+```
+
+### 3. 配置管理问题
+```python
+# 错误示例 - 硬编码
+API_KEY = "sk-123456"
+
+# 正确示例 - 使用配置
+from app.core.config import settings
+API_KEY = settings.DEFAULT_API_KEY
+```
+
+## 🎯 最佳实践总结
+
+1. **先分析后开发**: 始终先理解现有架构再进行修改
+2. **模块化设计**: 每个功能都是独立的模块
+3. **测试驱动**: 先写测试再写代码
+4. **文档同步**: 代码和文档同步更新
+5. **性能优先**: 考虑性能影响，使用异步和缓存
+6. **安全第一**: 始终考虑安全性
+7. **代码复用**: 避免重复代码，提取公共组件
+8. **版本控制**: 合理使用Git分支和提交信息
+description:
+globs:
+alwaysApply: true
+---
