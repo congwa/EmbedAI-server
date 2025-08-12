@@ -9,12 +9,12 @@ from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.services.config import ConfigService
 from app.core.response import ResponseModel
-from app.core.exceptions import (
-    APIException,
-    SystemException,
-    ResourceNotFoundException,
-    BusinessException,
-    ConfigurationException
+from app.core.response_utils import success_response
+from app.core.exceptions_new import (
+    SystemError,
+    BusinessError,
+    ResourceNotFoundError,
+    ConfigurationError
 )
 from app.schemas.config import (
     SystemConfigCreate, SystemConfigUpdate, SystemConfigResponse,
@@ -41,7 +41,7 @@ async def get_config_dashboard(
     config_service = ConfigService(db)
     dashboard_data = await config_service.get_dashboard_data()
     
-    return ResponseModel.create_success(
+    return success_response(
         data=dashboard_data,
         message="获取配置仪表板数据成功"
     )
@@ -58,7 +58,7 @@ async def get_prompt_config(
     config_manager = ConfigManager(db)
     config = await config_manager.get_prompt_config()
     
-    return ResponseModel.create_success(
+    return success_response(
         data=config,
         message="获取提示词配置成功"
     )
@@ -76,14 +76,14 @@ async def update_prompt_config(
     
     # 验证配置更新数据
     if not config_updates:
-        raise BusinessException("配置更新数据不能为空")
+        raise BusinessError("配置更新数据不能为空")
     
     updated_config = await config_manager.update_prompt_config(
         config_updates=config_updates,
         user_id=current_admin.id
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=updated_config,
         message="更新提示词配置成功"
     )
@@ -98,7 +98,7 @@ async def reset_prompt_config(
     config_manager = ConfigManager(db)
     reset_config = await config_manager.reset_prompt_config(user_id=current_admin.id)
     
-    return ResponseModel.create_success(
+    return success_response(
         data=reset_config,
         message="重置提示词配置成功"
     )
@@ -117,7 +117,7 @@ async def get_prompt_config_history(
         limit=limit
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=history,
         message="获取提示词配置历史成功"
     )
@@ -136,7 +136,7 @@ async def validate_prompt_config(
         config_data=config_data
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=validation_result,
         message="验证提示词配置成功"
     )
@@ -202,7 +202,7 @@ async def get_prompt_config_options(
         }
     }
     
-    return ResponseModel.create_success(
+    return success_response(
         data=options,
         message="获取提示词配置选项成功"
     )
@@ -247,7 +247,7 @@ async def get_prompt_config_stats(
         "cache_status": "active"
     }
     
-    return ResponseModel.create_success(
+    return success_response(
         data=stats,
         message="获取提示词配置统计成功"
     )
@@ -264,7 +264,7 @@ async def get_rag_config(
     config_manager = ConfigManager(db)
     config = await config_manager.get_rag_config()
     
-    return ResponseModel.create_success(
+    return success_response(
         data=config,
         message="获取RAG配置成功"
     )
@@ -284,7 +284,7 @@ async def update_rag_config(
         user_id=current_admin.id
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=updated_config,
         message="更新RAG配置成功"
     )
@@ -299,7 +299,7 @@ async def reset_rag_config(
     config_manager = ConfigManager(db)
     reset_config = await config_manager.reset_rag_config(user_id=current_admin.id)
     
-    return ResponseModel.create_success(
+    return success_response(
         data=reset_config,
         message="重置RAG配置成功"
     )
@@ -318,7 +318,7 @@ async def validate_rag_config(
         config_data=config_data
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=validation_result,
         message="验证RAG配置成功"
     )
@@ -372,7 +372,7 @@ async def get_rag_config_options(
         }
     }
     
-    return ResponseModel.create_success(
+    return success_response(
         data=options,
         message="获取RAG配置选项成功"
     )
@@ -417,7 +417,7 @@ async def get_rag_config_stats(
         "cache_status": "active"
     }
     
-    return ResponseModel.create_success(
+    return success_response(
         data=stats,
         message="获取RAG配置统计成功"
     )
@@ -434,7 +434,7 @@ async def create_config(
     config_service = ConfigService(db)
     config = await config_service.create_config(config_data)
     
-    return ResponseModel.create_success(
+    return success_response(
         data=config,
         message="创建系统配置成功"
     )
@@ -456,7 +456,7 @@ async def get_configs(
         search=search, include_sensitive=include_sensitive
     )
     
-    return ResponseModel.create_success(
+    return success_response(
         data=configs,
         message="获取系统配置列表成功"
     )
@@ -473,9 +473,9 @@ async def get_config(
     config = await config_service.get_config_by_key(str(config_id), include_sensitive)
     
     if not config:
-        raise ResourceNotFoundException("配置", config_id)
+        raise ResourceNotFoundError("配置", config_id)
     
-    return ResponseModel.create_success(
+    return success_response(
         data=config,
         message="获取系统配置成功"
     )
@@ -498,13 +498,13 @@ async def update_config(
             user_email=current_admin.email,
             ip_address=request.client.host if request.client else None
         )
-        return APIResponse.success(data=config)
+        return success_response(data=config)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BusinessError(str(e))
     except Exception as e:
         Logger.error(f"更新系统配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新系统配置失败")
+        raise SystemError("更新系统配置失败", original_exception=e)
 
 @router.post("/configs/batch-update", response_model=ResponseModel[dict])
 async def batch_update_configs(
@@ -522,11 +522,11 @@ async def batch_update_configs(
             user_email=current_admin.email,
             ip_address=request.client.host if request.client else None
         )
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"批量更新系统配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="批量更新系统配置失败")
+        raise SystemError("批量更新系统配置失败", original_exception=e)
 
 # ==================== 配置模板管理 ====================
 
@@ -540,13 +540,13 @@ async def create_template(
     try:
         config_service = ConfigService(db)
         template = await config_service.create_template(template_data, current_admin.id)
-        return APIResponse.success(data=template)
+        return success_response(data=template)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BusinessError(str(e))
     except Exception as e:
         Logger.error(f"创建配置模板失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建配置模板失败")
+        raise SystemError("创建配置模板失败", original_exception=e)
 
 @router.post("/templates/{template_id}/apply", response_model=ResponseModel[dict])
 async def apply_template(
@@ -559,13 +559,13 @@ async def apply_template(
     try:
         config_service = ConfigService(db)
         result = await config_service.apply_template(template_id, overwrite_existing)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BusinessError(str(e))
     except Exception as e:
         Logger.error(f"应用配置模板失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="应用配置模板失败")
+        raise SystemError("应用配置模板失败", original_exception=e)
 
 # ==================== 配置备份与恢复 ====================
 
@@ -583,11 +583,11 @@ async def create_backup(
             created_by=current_admin.id,
             created_by_email=current_admin.email
         )
-        return APIResponse.success(data=backup)
+        return success_response(data=backup)
         
     except Exception as e:
         Logger.error(f"创建配置备份失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建配置备份失败")
+        raise SystemError("创建配置备份失败", original_exception=e)
 
 # ==================== 环境变量管理 ====================
 
@@ -601,13 +601,13 @@ async def create_env_var(
     try:
         config_service = ConfigService(db)
         env_var = await config_service.create_env_var(env_data)
-        return APIResponse.success(data=env_var)
+        return success_response(data=env_var)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BusinessError(str(e))
     except Exception as e:
         Logger.error(f"创建环境变量失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建环境变量失败")
+        raise SystemError("创建环境变量失败", original_exception=e)
 
 @router.get("/env-vars", response_model=ResponseModel[List[EnvironmentVariableResponse]])
 async def get_env_vars(
@@ -624,11 +624,11 @@ async def get_env_vars(
         env_vars = await config_service.get_env_vars(
             skip=skip, limit=limit, category=category, include_sensitive=include_sensitive
         )
-        return APIResponse.success(data=env_vars)
+        return success_response(data=env_vars)
         
     except Exception as e:
         Logger.error(f"获取环境变量列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取环境变量列表失败")
+        raise SystemError("获取环境变量列表失败", original_exception=e)
 
 @router.put("/env-vars/{env_var_id}", response_model=ResponseModel[EnvironmentVariableResponse])
 async def update_env_var(
@@ -641,13 +641,13 @@ async def update_env_var(
     try:
         config_service = ConfigService(db)
         env_var = await config_service.update_env_var(env_var_id, env_data)
-        return APIResponse.success(data=env_var)
+        return success_response(data=env_var)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BusinessError(str(e))
     except Exception as e:
         Logger.error(f"更新环境变量失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新环境变量失败")
+        raise SystemError("更新环境变量失败", original_exception=e)
 
 @router.post("/env-vars/sync", response_model=ResponseModel[dict])
 async def sync_env_vars(
@@ -658,11 +658,11 @@ async def sync_env_vars(
     try:
         config_service = ConfigService(db)
         result = await config_service.sync_env_vars_to_os()
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"同步环境变量失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="同步环境变量失败")
+        raise SystemError("同步环境变量失败", original_exception=e)
 
 # ==================== 配置验证 ====================
 
@@ -676,11 +676,11 @@ async def validate_configs(
     try:
         config_service = ConfigService(db)
         result = await config_service.validate_configs(validation_request)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"验证配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="验证配置失败")
+        raise SystemError("验证配置失败", original_exception=e)
 
 # ==================== 配置导入导出 ====================
 
@@ -703,13 +703,13 @@ async def export_configs(
                 headers={"Content-Disposition": "attachment; filename=config_export.json"}
             )
         else:
-            raise HTTPException(status_code=400, detail="不支持的导出格式")
+            raise BusinessError("不支持的导出格式")
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"导出配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="导出配置失败")
+        raise SystemError("导出配置失败", original_exception=e)
 
 @router.post("/import", response_model=ResponseModel[ConfigImportResult])
 async def import_configs(
@@ -721,8 +721,8 @@ async def import_configs(
     try:
         config_service = ConfigService(db)
         result = await config_service.import_configs(import_request)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"导入配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="导入配置失败")
+        raise SystemError("导入配置失败", original_exception=e)

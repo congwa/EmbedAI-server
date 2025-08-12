@@ -12,7 +12,8 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseMemberUpdate
 )
 from app.services.knowledge_base import KnowledgeBaseService
-from app.core.response import APIResponse
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError
 from app.models.user import User
 from app.core.decorators import require_knowledge_base_permission
 from app.models.enums import PermissionType
@@ -90,7 +91,7 @@ async def create_knowledge_base(
             }
         )
         
-        return APIResponse.success(data=result.to_dict())
+        return success_response(data=result.to_dict())
         
     except Exception as e:
         # 计算处理时间
@@ -175,7 +176,7 @@ async def update_knowledge_base(
             }
         )
         
-        return APIResponse.success(data=result.to_dict())
+        return success_response(data=result.to_dict())
         
     except Exception as e:
         # 计算处理时间
@@ -305,7 +306,7 @@ async def train_knowledge_base(
             }
         )
         
-        return APIResponse.success(data=result.to_dict())
+        return success_response(data=result.to_dict())
         
     except Exception as e:
         # 计算处理时间
@@ -351,7 +352,7 @@ async def add_user_to_knowledge_base(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.add_user(kb_id, permission, current_user.id)
-    return APIResponse.success()
+    return success_response()
 
 @router.put("/{kb_id}/users/{user_id}")
 async def update_user_permission(
@@ -375,7 +376,7 @@ async def update_user_permission(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.update_user_permission(kb_id, user_id, permission, current_user.id)
-    return APIResponse.success()
+    return success_response()
 
 @router.delete("/{kb_id}/users/{user_id}")
 async def remove_user_from_knowledge_base(
@@ -397,7 +398,7 @@ async def remove_user_from_knowledge_base(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.remove_user(kb_id, user_id, current_user.id)
-    return APIResponse.success()
+    return success_response()
 
 @router.get("/my")
 async def list_my_knowledge_bases(
@@ -415,7 +416,7 @@ async def list_my_knowledge_bases(
     """
     kb_service = KnowledgeBaseService(db)
     result = await kb_service.get_user_knowledge_bases(current_user.id)
-    return APIResponse.success(data=result)
+    return success_response(data=result)
 
 @router.get("/{kb_id}")
 @require_knowledge_base_permission(PermissionType.VIEWER)
@@ -473,7 +474,7 @@ async def get_knowledge_base(
             }
         )
         
-        return APIResponse.success(data=result.to_dict())
+        return success_response(data=result.to_dict())
         
     except Exception as e:
         # 计算处理时间
@@ -627,7 +628,7 @@ async def query_knowledge_base(
             }
         )
         
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         # 计算处理时间
@@ -681,7 +682,7 @@ async def list_knowledge_base_members(
     """
     kb_service = KnowledgeBaseService(db)
     result = await kb_service.get_knowledge_base_members(kb_id, current_user.id)
-    return APIResponse.success(data=result)
+    return success_response(data=result)
 
 @router.post("/{kb_id}/members")
 @require_knowledge_base_permission(PermissionType.ADMIN)
@@ -704,7 +705,7 @@ async def add_knowledge_base_member(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.add_knowledge_base_member(kb_id, member_data, current_user.id)
-    return APIResponse.success(message="成员添加成功")
+    return success_response(message="成员添加成功")
 
 @router.put("/{kb_id}/members/{user_id}")
 @require_knowledge_base_permission(PermissionType.ADMIN)
@@ -729,7 +730,7 @@ async def update_knowledge_base_member(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.update_knowledge_base_member(kb_id, user_id, member_data, current_user.id)
-    return APIResponse.success(message="成员权限更新成功")
+    return success_response(message="成员权限更新成功")
 
 @router.delete("/{kb_id}/members/{user_id}")
 @require_knowledge_base_permission(PermissionType.ADMIN)
@@ -752,7 +753,7 @@ async def remove_knowledge_base_member(
     """
     kb_service = KnowledgeBaseService(db)
     await kb_service.remove_knowledge_base_member(kb_id, user_id, current_user.id)
-    return APIResponse.success(message="成员移除成功") 
+    return success_response(message="成员移除成功") 
 # 提示词模板配置相
 关接口
 
@@ -779,16 +780,13 @@ async def get_prompt_template_config(
         kb_service = KnowledgeBaseService(db)
         config = await kb_service.get_prompt_template_config(kb_id, current_user.id)
         
-        return APIResponse.success(data=config)
+        return success_response(data=config)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"获取提示词模板配置失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取配置失败: {str(e)}"
-        )
+        raise SystemError("获取配置失败", original_exception=e)
 
 
 @router.put("/{kb_id}/prompt-template-config/default")
@@ -821,7 +819,7 @@ async def set_default_prompt_template(
             kb_id, current_user.id, template_id, config
         )
         
-        return APIResponse.success(
+        return success_response(
             data={
                 "kb_id": kb.id,
                 "default_template_id": kb.default_prompt_template_id,
@@ -834,10 +832,7 @@ async def set_default_prompt_template(
         raise
     except Exception as e:
         Logger.error(f"设置默认提示词模板失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"设置默认模板失败: {str(e)}"
-        )
+        raise SystemError("设置默认模板失败", original_exception=e)
 
 
 @router.put("/{kb_id}/prompt-template-config")
@@ -867,7 +862,7 @@ async def update_prompt_template_config(
             kb_id, current_user.id, config_update
         )
         
-        return APIResponse.success(
+        return success_response(
             data={
                 "kb_id": kb.id,
                 "updated_config": kb.get_prompt_template_config()
@@ -879,10 +874,7 @@ async def update_prompt_template_config(
         raise
     except Exception as e:
         Logger.error(f"更新提示词模板配置失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新配置失败: {str(e)}"
-        )
+        raise SystemError("更新配置失败", original_exception=e)
 
 
 @router.post("/{kb_id}/query-with-prompt")
@@ -910,10 +902,7 @@ async def query_with_prompt_template(
         # 提取请求参数
         query = request_data.get("query")
         if not query:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="查询内容不能为空"
-            )
+            raise BusinessError("查询内容不能为空")
         
         prompt_template_id = request_data.get("prompt_template_id")
         template_variables = request_data.get("template_variables", {})
@@ -941,16 +930,13 @@ async def query_with_prompt_template(
             template_variables=template_variables
         )
         
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"使用提示词模板查询失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"查询失败: {str(e)}"
-        )
+        raise SystemError("查询失败", original_exception=e)
 
 
 @router.get("/{kb_id}/prompt-template-suggestions")
@@ -980,13 +966,10 @@ async def get_prompt_template_suggestions(
             kb_id, current_user.id, query_type
         )
         
-        return APIResponse.success(data=suggestions)
+        return success_response(data=suggestions)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"获取提示词模板建议失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取建议失败: {str(e)}"
-        )
+        raise SystemError("获取建议失败", original_exception=e)

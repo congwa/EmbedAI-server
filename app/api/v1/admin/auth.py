@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.database import get_db
 from app.services.auth import authenticate_user
 from app.core.security import create_access_token
-from app.core.response import APIResponse
+from app.core.response_utils import success_response
 from app.schemas.user import Token, UserInfo
 from app.schemas.auth import OAuth2EmailPasswordRequestForm
 
@@ -50,4 +50,4 @@ async def login(
         )
     )
         
-    return APIResponse.success(data=token_response)
+    return success_response(data=token_response)

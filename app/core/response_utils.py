@@ -41,8 +41,6 @@ def success_response(
     code: int = status.HTTP_200_OK
 ) -> Dict[str, Any]:
     """创建成功响应数据
-    
-    这是新的成功响应创建函数，替代APIResponse.success()。
     返回字典格式的响应数据，由路由函数直接返回。
     
     Args:

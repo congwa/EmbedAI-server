@@ -44,7 +44,6 @@ class User(Base):
     # 提示词模板关系
     prompt_templates = relationship("PromptTemplate", back_populates="owner", cascade="all, delete-orphan")
 
-    # RBAC关系定义将在rbac模型中通过backref创建
 
     def __repr__(self):
         return f"<User {self.email}>"

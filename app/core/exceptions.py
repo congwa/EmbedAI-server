@@ -2,7 +2,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from typing import Union, Dict, Any, Optional
 from sqlalchemy.exc import SQLAlchemyError
-from app.core.response import APIResponse
+from app.core.response_utils import success_response
 from fastapi.exceptions import RequestValidationError
 from app.core.logger import Logger
 
@@ -251,20 +251,28 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         exc (HTTPException): HTTP异常实例
 
     Returns:
-        APIResponse: 统一格式的错误响应
+        JSONResponse: 统一格式的错误响应
     """
     print(f"HTTP Exception occurred: {exc.detail}")  # 打印错误详情
     print(f"Status code: {exc.status_code}")  # 打印状态码
     print(f"Headers: {exc.headers}")  # 打印头信息
     Logger.error(f"HTTP Exception occurred: {exc.detail}")
-    return APIResponse.error(
-        message=exc.detail,
-        code=exc.status_code,
-        data={
+    
+    response_data = {
+        "success": False,
+        "code": exc.status_code,
+        "message": exc.detail,
+        "data": {
             "error_type": "HTTPException",
             "headers": exc.headers,
             "path": str(request.url),
-        },
+        }
+    }
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=response_data,
+        headers=exc.headers
     )
 
 
@@ -274,14 +282,21 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     print(f"Database error occurred: {error_msg}")  # 打印数据库错误
     print(f"Error type: {type(exc)}")  # 打印错误类型
     Logger.error(f"Database error occurred: {error_msg}")
-    return APIResponse.error(
-        message=error_msg,
-        code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        data={
+    
+    response_data = {
+        "success": False,
+        "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "message": error_msg,
+        "data": {
             "error_type": "DatabaseError",
             "error_details": str(exc),
             "path": str(request.url),
-        },
+        }
+    }
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=response_data
     )
 
 
@@ -297,7 +312,7 @@ async def validation_exception_handler(
         exc (Union[ValidationError, RequestValidationError]): 验证异常实例
 
     Returns:
-        APIResponse: 统一格式的错误响应
+        JSONResponse: 统一格式的错误响应
     """
     if isinstance(exc, RequestValidationError):
         # 处理 FastAPI 的请求验证错误
@@ -313,10 +328,20 @@ async def validation_exception_handler(
         detail = exc.detail
 
     Logger.error(f"Validation error: {detail}")
-    return APIResponse.error(
-        message=detail,
-        code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        data={"error_type": "ValidationError", "path": str(request.url)},
+    
+    response_data = {
+        "success": False,
+        "code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "message": detail,
+        "data": {
+            "error_type": "ValidationError", 
+            "path": str(request.url)
+        }
+    }
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=response_data
     )
 
 
@@ -330,19 +355,26 @@ async def generic_exception_handler(request: Request, exc: Exception):
         exc (Exception): 异常实例
 
     Returns:
-        APIResponse: 统一格式的错误响应
+        JSONResponse: 统一格式的错误响应
     """
     error_msg = f"An unexpected error occurred: {str(exc)}"
     print(error_msg)  # 打印错误信息
     print(f"Error type: {type(exc)}")  # 打印错误类型
     print(f"Error details: {exc.__dict__}")  # 打印错误详情
     Logger.error(f"An unexpected error occurred: {str(exc)}, details: {exc.__dict__}")
-    return APIResponse.error(
-        message=error_msg,
-        code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        data={
+    
+    response_data = {
+        "success": False,
+        "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "message": error_msg,
+        "data": {
             "error_type": str(type(exc).__name__),
             "error_details": str(exc),
             "path": str(request.url),
-        },
+        }
+    }
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=response_data
     )

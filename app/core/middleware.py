@@ -4,7 +4,7 @@ from starlette.responses import Response
 import time
 import uuid
 from app.core.logger import Logger
-from app.core.response import APIResponse
+from app.core.exceptions_new import ValidationError
 import traceback
 
 class TraceMiddleware(BaseHTTPMiddleware):
@@ -104,9 +104,6 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
                         method=request.method,
                         client_ip=request.client.host if request.client else "unknown"
                     )
-                    return APIResponse.error(
-                        message=f"缺少必要的请求头: {header}",
-                        code=400
-                    )
+                    raise ValidationError(f"缺少必要的请求头: {header}")
         
         return await call_next(request)

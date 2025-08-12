@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user, get_current_user
 from app.services.security import SecurityService
-from app.core.response import APIResponse, ResponseModel
+from app.core.response import ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError, ValidationError
 from app.schemas.security import (
     TwoFactorSetupRequest, TwoFactorSetupResponse, TwoFactorVerifyRequest,
     TwoFactorStatusResponse, SessionListResponse, SessionTerminateRequest,
@@ -33,11 +35,11 @@ async def get_security_dashboard(
     try:
         security_service = SecurityService(db)
         dashboard_data = await security_service.get_security_dashboard()
-        return APIResponse.success(data=dashboard_data)
+        return success_response(data=dashboard_data)
         
     except Exception as e:
         Logger.error(f"获取安全仪表板数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取安全仪表板数据失败")
+        raise SystemError("获取安全仪表板数据失败", original_exception=e)
 
 # ==================== 双因子认证 ====================
 
@@ -51,13 +53,13 @@ async def setup_two_factor(
     try:
         security_service = SecurityService(db)
         setup_response = await security_service.setup_two_factor(current_user.id, setup_request)
-        return APIResponse.success(data=setup_response)
+        return success_response(data=setup_response)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(str(e))
     except Exception as e:
         Logger.error(f"设置双因子认证失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="设置双因子认证失败")
+        raise SystemError("设置双因子认证失败", original_exception=e)
 
 @router.post("/2fa/verify", response_model=ResponseModel[bool])
 async def verify_two_factor(
@@ -69,11 +71,11 @@ async def verify_two_factor(
     try:
         security_service = SecurityService(db)
         is_valid = await security_service.verify_two_factor(current_user.id, verify_request)
-        return APIResponse.success(data=is_valid)
+        return success_response(data=is_valid)
         
     except Exception as e:
         Logger.error(f"验证双因子认证失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="验证双因子认证失败")
+        raise SystemError("验证双因子认证失败", original_exception=e)
 
 @router.get("/2fa/status", response_model=ResponseModel[TwoFactorStatusResponse])
 async def get_two_factor_status(
@@ -84,11 +86,11 @@ async def get_two_factor_status(
     try:
         security_service = SecurityService(db)
         status = await security_service.get_two_factor_status(current_user.id)
-        return APIResponse.success(data=status)
+        return success_response(data=status)
         
     except Exception as e:
         Logger.error(f"获取双因子认证状态失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取双因子认证状态失败")
+        raise SystemError("获取双因子认证状态失败", original_exception=e)
 
 @router.delete("/2fa", response_model=ResponseModel[bool])
 async def disable_two_factor(
@@ -99,11 +101,11 @@ async def disable_two_factor(
     try:
         security_service = SecurityService(db)
         result = await security_service.disable_two_factor(current_user.id)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"禁用双因子认证失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="禁用双因子认证失败")
+        raise SystemError("禁用双因子认证失败", original_exception=e)
 
 # ==================== 会话管理 ====================
 
@@ -116,11 +118,11 @@ async def get_user_sessions(
     try:
         security_service = SecurityService(db)
         sessions = await security_service.get_user_sessions(current_user.id)
-        return APIResponse.success(data=sessions)
+        return success_response(data=sessions)
         
     except Exception as e:
         Logger.error(f"获取用户会话列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户会话列表失败")
+        raise SystemError("获取用户会话列表失败", original_exception=e)
 
 @router.post("/sessions/terminate", response_model=ResponseModel[int])
 async def terminate_sessions(
@@ -137,11 +139,11 @@ async def terminate_sessions(
             terminated_by=current_user.id,
             terminate_all=terminate_request.terminate_all
         )
-        return APIResponse.success(data=terminated_count)
+        return success_response(data=terminated_count)
         
     except Exception as e:
         Logger.error(f"终止用户会话失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="终止用户会话失败")
+        raise SystemError("终止用户会话失败", original_exception=e)
 
 # ==================== IP控制管理 ====================
 
@@ -155,13 +157,13 @@ async def add_ip_whitelist(
     try:
         security_service = SecurityService(db)
         whitelist = await security_service.add_ip_whitelist(whitelist_data, current_admin.id)
-        return APIResponse.success(data=whitelist)
+        return success_response(data=whitelist)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(str(e))
     except Exception as e:
         Logger.error(f"添加IP白名单失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="添加IP白名单失败")
+        raise SystemError("添加IP白名单失败", original_exception=e)
 
 @router.get("/ip/whitelist", response_model=ResponseModel[List[IPWhitelistResponse]])
 async def get_ip_whitelist(
@@ -175,11 +177,11 @@ async def get_ip_whitelist(
     try:
         # 这里需要在SecurityService中实现get_ip_whitelist方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取IP白名单列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取IP白名单列表失败")
+        raise SystemError("获取IP白名单列表失败", original_exception=e)
 
 @router.post("/ip/blacklist", response_model=ResponseModel[IPBlacklistResponse])
 async def add_ip_blacklist(
@@ -191,13 +193,13 @@ async def add_ip_blacklist(
     try:
         security_service = SecurityService(db)
         blacklist = await security_service.add_ip_blacklist(blacklist_data, current_admin.id)
-        return APIResponse.success(data=blacklist)
+        return success_response(data=blacklist)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(str(e))
     except Exception as e:
         Logger.error(f"添加IP黑名单失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="添加IP黑名单失败")
+        raise SystemError("添加IP黑名单失败", original_exception=e)
 
 @router.get("/ip/blacklist", response_model=ResponseModel[List[IPBlacklistResponse]])
 async def get_ip_blacklist(
@@ -211,11 +213,11 @@ async def get_ip_blacklist(
     try:
         # 这里需要在SecurityService中实现get_ip_blacklist方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取IP黑名单列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取IP黑名单列表失败")
+        raise SystemError("获取IP黑名单列表失败", original_exception=e)
 
 @router.post("/ip/check", response_model=ResponseModel[dict])
 async def check_ip_access(
@@ -227,7 +229,7 @@ async def check_ip_access(
     try:
         security_service = SecurityService(db)
         is_allowed, reason = await security_service.check_ip_access(ip_address)
-        return APIResponse.success(data={
+        return success_response(data={
             "ip_address": ip_address,
             "is_allowed": is_allowed,
             "reason": reason
@@ -235,7 +237,7 @@ async def check_ip_access(
         
     except Exception as e:
         Logger.error(f"检查IP访问权限失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="检查IP访问权限失败")
+        raise SystemError("检查IP访问权限失败", original_exception=e)
 
 @router.post("/ip/bulk-operation", response_model=ResponseModel[dict])
 async def bulk_ip_operation(
@@ -247,11 +249,11 @@ async def bulk_ip_operation(
     try:
         security_service = SecurityService(db)
         result = await security_service.bulk_ip_operation(operation, current_admin.id)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"批量IP操作失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="批量IP操作失败")
+        raise SystemError("批量IP操作失败", original_exception=e)
 
 # ==================== 安全审计 ====================
 
@@ -265,11 +267,11 @@ async def generate_security_audit(
     try:
         security_service = SecurityService(db)
         audit_response = await security_service.generate_security_audit(audit_request)
-        return APIResponse.success(data=audit_response)
+        return success_response(data=audit_response)
         
     except Exception as e:
         Logger.error(f"生成安全审计报告失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="生成安全审计报告失败")
+        raise SystemError("生成安全审计报告失败", original_exception=e)
 
 @router.get("/events", response_model=ResponseModel[List[SecurityEventResponse]])
 async def get_security_events(
@@ -285,11 +287,11 @@ async def get_security_events(
     try:
         # 这里需要在SecurityService中实现get_security_events方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取安全事件列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取安全事件列表失败")
+        raise SystemError("获取安全事件列表失败", original_exception=e)
 
 @router.post("/events/resolve", response_model=ResponseModel[bool])
 async def resolve_security_events(
@@ -301,11 +303,11 @@ async def resolve_security_events(
     try:
         # 这里需要在SecurityService中实现resolve_security_events方法
         # 为了简化，暂时返回True
-        return APIResponse.success(data=True)
+        return success_response(data=True)
         
     except Exception as e:
         Logger.error(f"处理安全事件失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="处理安全事件失败")
+        raise SystemError("处理安全事件失败", original_exception=e)
 
 # ==================== 密码安全 ====================
 
@@ -323,10 +325,10 @@ async def change_password(
             current_password=password_request.current_password,
             new_password=password_request.new_password
         )
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(str(e))
     except Exception as e:
         Logger.error(f"修改密码失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="修改密码失败")
+        raise SystemError("修改密码失败", original_exception=e)

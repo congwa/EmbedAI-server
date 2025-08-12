@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.services.content import ContentService
-from app.core.response import APIResponse, ResponseModel
+from app.core.response import ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError
 from app.schemas.content import (
     ContentModerationRuleCreate, ContentModerationRuleUpdate, ContentModerationRuleResponse,
     ContentModerationRequest, ContentModerationLogResponse,
@@ -33,11 +35,11 @@ async def get_content_dashboard(
     try:
         content_service = ContentService(db)
         dashboard_data = await content_service.get_content_dashboard()
-        return APIResponse.success(data=dashboard_data)
+        return success_response(data=dashboard_data)
         
     except Exception as e:
         Logger.error(f"获取内容管理仪表板数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取内容管理仪表板数据失败")
+        raise SystemError("获取内容管理仪表板数据失败", original_exception=e)
 
 # ==================== 内容审核管理 ====================
 
@@ -51,11 +53,11 @@ async def create_moderation_rule(
     try:
         content_service = ContentService(db)
         rule = await content_service.create_moderation_rule(rule_data, current_admin.id)
-        return APIResponse.success(data=rule)
+        return success_response(data=rule)
         
     except Exception as e:
         Logger.error(f"创建内容审核规则失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建内容审核规则失败")
+        raise SystemError("创建内容审核规则失败", original_exception=e)
 
 @router.get("/moderation/rules", response_model=ResponseModel[List[ContentModerationRuleResponse]])
 async def get_moderation_rules(
@@ -70,11 +72,11 @@ async def get_moderation_rules(
     try:
         # 这里需要在ContentService中实现get_moderation_rules方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取内容审核规则列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取内容审核规则列表失败")
+        raise SystemError("获取内容审核规则列表失败", original_exception=e)
 
 @router.post("/moderation/moderate", response_model=ResponseModel[ContentModerationLogResponse])
 async def moderate_content(
@@ -86,11 +88,11 @@ async def moderate_content(
     try:
         content_service = ContentService(db)
         log = await content_service.moderate_content(moderation_request, current_admin.id)
-        return APIResponse.success(data=log)
+        return success_response(data=log)
         
     except Exception as e:
         Logger.error(f"审核内容失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="审核内容失败")
+        raise SystemError("审核内容失败", original_exception=e)
 
 @router.get("/moderation/logs", response_model=ResponseModel[List[ContentModerationLogResponse]])
 async def get_moderation_logs(
@@ -106,11 +108,11 @@ async def get_moderation_logs(
     try:
         # 这里需要在ContentService中实现get_moderation_logs方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取内容审核日志失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取内容审核日志失败")
+        raise SystemError("获取内容审核日志失败", original_exception=e)
 
 # ==================== 批量操作管理 ====================
 
@@ -124,11 +126,11 @@ async def create_bulk_operation(
     try:
         content_service = ContentService(db)
         operation = await content_service.create_bulk_operation(operation_data, current_admin.id)
-        return APIResponse.success(data=operation)
+        return success_response(data=operation)
         
     except Exception as e:
         Logger.error(f"创建批量操作失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建批量操作失败")
+        raise SystemError("创建批量操作失败", original_exception=e)
 
 @router.get("/bulk-operations", response_model=ResponseModel[List[BulkOperationResponse]])
 async def get_bulk_operations(
@@ -143,11 +145,11 @@ async def get_bulk_operations(
     try:
         # 这里需要在ContentService中实现get_bulk_operations方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取批量操作列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取批量操作列表失败")
+        raise SystemError("获取批量操作列表失败", original_exception=e)
 
 @router.get("/bulk-operations/{operation_id}", response_model=ResponseModel[BulkOperationResponse])
 async def get_bulk_operation(
@@ -159,13 +161,13 @@ async def get_bulk_operation(
     try:
         # 这里需要在ContentService中实现get_bulk_operation方法
         # 为了简化，暂时返回错误
-        raise HTTPException(status_code=404, detail="批量操作不存在")
+        raise ResourceNotFoundError("批量操作", operation_id)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"获取批量操作详情失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取批量操作详情失败")
+        raise SystemError("获取批量操作详情失败", original_exception=e)
 
 # ==================== 标签管理 ====================
 
@@ -179,11 +181,11 @@ async def create_tag(
     try:
         content_service = ContentService(db)
         tag = await content_service.create_tag(tag_data, current_admin.id)
-        return APIResponse.success(data=tag)
+        return success_response(data=tag)
         
     except Exception as e:
         Logger.error(f"创建内容标签失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建内容标签失败")
+        raise SystemError("创建内容标签失败", original_exception=e)
 
 @router.get("/tags", response_model=ResponseModel[List[ContentTagResponse]])
 async def get_tags(
@@ -198,11 +200,11 @@ async def get_tags(
     try:
         content_service = ContentService(db)
         tags = await content_service.get_tags(skip, limit, category, is_active)
-        return APIResponse.success(data=tags)
+        return success_response(data=tags)
         
     except Exception as e:
         Logger.error(f"获取标签列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取标签列表失败")
+        raise SystemError("获取标签列表失败", original_exception=e)
 
 @router.put("/tags/{tag_id}", response_model=ResponseModel[ContentTagResponse])
 async def update_tag(
@@ -215,13 +217,13 @@ async def update_tag(
     try:
         # 这里需要在ContentService中实现update_tag方法
         # 为了简化，暂时返回错误
-        raise HTTPException(status_code=404, detail="标签不存在")
+        raise ResourceNotFoundError("标签", tag_id)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"更新内容标签失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新内容标签失败")
+        raise SystemError("更新内容标签失败", original_exception=e)
 
 @router.delete("/tags/{tag_id}", response_model=ResponseModel[bool])
 async def delete_tag(
@@ -233,11 +235,11 @@ async def delete_tag(
     try:
         # 这里需要在ContentService中实现delete_tag方法
         # 为了简化，暂时返回True
-        return APIResponse.success(data=True)
+        return success_response(data=True)
         
     except Exception as e:
         Logger.error(f"删除内容标签失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="删除内容标签失败")
+        raise SystemError("删除内容标签失败", original_exception=e)
 
 @router.post("/tags/batch-operation", response_model=ResponseModel[dict])
 async def batch_tag_operation(
@@ -249,11 +251,11 @@ async def batch_tag_operation(
     try:
         content_service = ContentService(db)
         result = await content_service.batch_tag_operation(operation, current_admin.id)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except Exception as e:
         Logger.error(f"批量标签操作失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="批量标签操作失败")
+        raise SystemError("批量标签操作失败", original_exception=e)
 
 # ==================== 分类管理 ====================
 
@@ -267,11 +269,11 @@ async def create_category(
     try:
         content_service = ContentService(db)
         category = await content_service.create_category(category_data, current_admin.id)
-        return APIResponse.success(data=category)
+        return success_response(data=category)
         
     except Exception as e:
         Logger.error(f"创建内容分类失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建内容分类失败")
+        raise SystemError("创建内容分类失败", original_exception=e)
 
 @router.get("/categories", response_model=ResponseModel[List[dict]])
 async def get_categories_tree(
@@ -282,11 +284,11 @@ async def get_categories_tree(
     try:
         content_service = ContentService(db)
         categories = await content_service.get_categories_tree()
-        return APIResponse.success(data=categories)
+        return success_response(data=categories)
         
     except Exception as e:
         Logger.error(f"获取分类树结构失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取分类树结构失败")
+        raise SystemError("获取分类树结构失败", original_exception=e)
 
 # ==================== 高级搜索 ====================
 
@@ -300,11 +302,11 @@ async def advanced_search(
     try:
         content_service = ContentService(db)
         search_result = await content_service.advanced_search(search_request)
-        return APIResponse.success(data=search_result)
+        return success_response(data=search_result)
         
     except Exception as e:
         Logger.error(f"高级搜索失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="高级搜索失败")
+        raise SystemError("高级搜索失败", original_exception=e)
 
 # ==================== 数据导出 ====================
 
@@ -318,11 +320,11 @@ async def create_export_task(
     try:
         content_service = ContentService(db)
         export_task = await content_service.create_export_task(export_request, current_admin.id)
-        return APIResponse.success(data=export_task)
+        return success_response(data=export_task)
         
     except Exception as e:
         Logger.error(f"创建数据导出任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建数据导出任务失败")
+        raise SystemError("创建数据导出任务失败", original_exception=e)
 
 @router.get("/exports", response_model=ResponseModel[List[DataExportResponse]])
 async def get_export_tasks(
@@ -337,11 +339,11 @@ async def get_export_tasks(
     try:
         # 这里需要在ContentService中实现get_export_tasks方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取数据导出任务列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取数据导出任务列表失败")
+        raise SystemError("获取数据导出任务列表失败", original_exception=e)
 
 @router.get("/exports/{task_id}/download")
 async def download_export_file(
@@ -353,10 +355,10 @@ async def download_export_file(
     try:
         # 这里需要实现文件下载逻辑
         # 为了简化，暂时返回错误
-        raise HTTPException(status_code=404, detail="文件不存在")
+        raise ResourceNotFoundError("文件", task_id)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"下载导出文件失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="下载导出文件失败")
+        raise SystemError("下载导出文件失败", original_exception=e)

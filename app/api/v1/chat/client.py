@@ -4,7 +4,9 @@ from app.models.database import get_db
 from app.services.chat import ChatService
 from app.schemas.chat import ChatResponse, ChatListResponse, ChatRequest, ChatMessageResponse, MarkReadRequest, MessageResponse
 from typing import Optional, List
-from app.core.response import ResponseModel, APIResponse
+from app.core.response import ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError, ForbiddenError
 from app.core.logger import Logger
 
 # 创建客户端聊天路由
@@ -40,7 +42,7 @@ async def create_chat(
         messages=[]
     )
     
-    return APIResponse.success(data=chat_response)
+    return success_response(data=chat_response)
 
 @router.get("/list", response_model=ResponseModel[ChatListResponse])
 async def list_chats(
@@ -62,7 +64,7 @@ async def list_chats(
     chat_service = ChatService(db)
     chats = await chat_service.list_user_chats(third_party_user_id, skip=skip, limit=limit)
     total = len(chats)  # 这里可以根据实际情况调整总数的获取方式
-    return APIResponse.success(data=ChatListResponse(total=total, items=chats))
+    return success_response(data=ChatListResponse(total=total, items=chats))
 
 @router.get("/{chat_id}", response_model=ResponseModel[ChatResponse])
 async def get_chat(
@@ -75,7 +77,7 @@ async def get_chat(
     
     # 验证会话所有权
     if not await chat_service.check_chat_ownership(chat_id, third_party_user_id):
-        raise HTTPException(status_code=403, detail="您无权访问该聊天会话")
+        raise ForbiddenError("您无权访问该聊天会话")
     
     chat = await chat_service.get_chat(chat_id)
     
@@ -85,7 +87,7 @@ async def get_chat(
         user_id=third_party_user_id
     )
     
-    return APIResponse.success(data=chat)
+    return success_response(data=chat)
 
 @router.get("/{chat_id}/messages", response_model=ResponseModel)
 async def get_messages(
@@ -100,12 +102,12 @@ async def get_messages(
     
     # 验证会话所有权
     if not await chat_service.check_chat_ownership(chat_id, third_party_user_id):
-        raise HTTPException(status_code=403, detail="您无权访问该聊天会话")
+        raise ForbiddenError("您无权访问该聊天会话")
     
     # 获取消息
     user = await chat_service.get_or_create_third_party_user(third_party_user_id)
     if not user.identity:
-        raise HTTPException(status_code=404, detail="User identity not found")
+        raise ResourceNotFoundError("用户身份", third_party_user_id)
 
     messages_data = await chat_service.get_messages(
         chat_id=chat_id,
@@ -114,7 +116,7 @@ async def get_messages(
         page_size=page_size
     )
     
-    return APIResponse.success(data=messages_data)
+    return success_response(data=messages_data)
 
 @router.delete("/{chat_id}", response_model=ResponseModel)
 async def delete_chat(
@@ -127,7 +129,7 @@ async def delete_chat(
     
     # 验证会话所有权
     if not await chat_service.check_chat_ownership(chat_id, third_party_user_id):
-        raise HTTPException(status_code=403, detail="您无权删除该聊天会话")
+        raise ForbiddenError("您无权删除该聊天会话")
     
     # 删除会话
     await chat_service.delete_chat(
@@ -135,7 +137,7 @@ async def delete_chat(
         user_id=third_party_user_id
     )
     
-    return APIResponse.success(data={"message": "聊天会话已删除", "chat_id": chat_id})
+    return success_response(data={"message": "聊天会话已删除", "chat_id": chat_id})
 
 
 @router.post("/{chat_id}/mark_read", status_code=status.HTTP_204_NO_CONTENT)
@@ -150,11 +152,11 @@ async def mark_messages_as_read(
 
     # 验证会话所有权
     if not await chat_service.check_chat_ownership(chat_id, third_party_user_id):
-        raise HTTPException(status_code=403, detail="您无权访问该聊天会话")
+        raise ForbiddenError("您无权访问该聊天会话")
 
     user = await chat_service.get_or_create_third_party_user(third_party_user_id)
     if not user.identity:
-        raise HTTPException(status_code=404, detail="User identity not found")
+        raise ResourceNotFoundError("用户身份", third_party_user_id)
 
     await chat_service.mark_messages_as_read(
         chat_id=chat_id,

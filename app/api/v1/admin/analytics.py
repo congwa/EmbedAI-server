@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.services.analytics import AnalyticsService
-from app.core.response import APIResponse, ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError
 from app.schemas.analytics import (
     SystemOverviewResponse, UserActivityStats, KnowledgeBaseStats,
     PerformanceMetrics, CostAnalysis, TimeSeriesData, AnalyticsQuery,
@@ -63,11 +64,11 @@ async def get_dashboard_data(
             alerts=alerts
         )
         
-        return APIResponse.success(data=dashboard_data)
+        return success_response(data=dashboard_data)
         
     except Exception as e:
         Logger.error(f"获取仪表板数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取仪表板数据失败")
+        raise SystemError("获取仪表板数据失败", original_exception=e)
 
 @router.get("/overview", response_model=ResponseModel[SystemOverviewResponse])
 async def get_system_overview(
@@ -78,11 +79,11 @@ async def get_system_overview(
     try:
         analytics_service = AnalyticsService(db)
         overview = await analytics_service.get_system_overview()
-        return APIResponse.success(data=overview)
+        return success_response(data=overview)
         
     except Exception as e:
         Logger.error(f"获取系统概览失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取系统概览失败")
+        raise SystemError("获取系统概览失败", original_exception=e)
 
 @router.get("/users/activity", response_model=ResponseModel[List[UserActivityStats]])
 async def get_user_activity_stats(
@@ -100,11 +101,11 @@ async def get_user_activity_stats(
             start_date=start_date,
             end_date=end_date
         )
-        return APIResponse.success(data=stats)
+        return success_response(data=stats)
         
     except Exception as e:
         Logger.error(f"获取用户活动统计失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户活动统计失败")
+        raise SystemError("获取用户活动统计失败", original_exception=e)
 
 @router.get("/knowledge-bases/stats", response_model=ResponseModel[List[KnowledgeBaseStats]])
 async def get_knowledge_base_stats(
@@ -122,11 +123,11 @@ async def get_knowledge_base_stats(
             start_date=start_date,
             end_date=end_date
         )
-        return APIResponse.success(data=stats)
+        return success_response(data=stats)
         
     except Exception as e:
         Logger.error(f"获取知识库统计失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取知识库统计失败")
+        raise SystemError("获取知识库统计失败", original_exception=e)
 
 @router.get("/performance/metrics", response_model=ResponseModel[List[PerformanceMetrics]])
 async def get_performance_metrics(
@@ -142,11 +143,11 @@ async def get_performance_metrics(
             hours=hours,
             granularity=granularity
         )
-        return APIResponse.success(data=metrics)
+        return success_response(data=metrics)
         
     except Exception as e:
         Logger.error(f"获取性能指标失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取性能指标失败")
+        raise SystemError("获取性能指标失败", original_exception=e)
 
 @router.get("/costs/analysis", response_model=ResponseModel[CostAnalysis])
 async def get_cost_analysis(
@@ -171,11 +172,11 @@ async def get_cost_analysis(
             user_id=user_id,
             kb_id=kb_id
         )
-        return APIResponse.success(data=analysis)
+        return success_response(data=analysis)
         
     except Exception as e:
         Logger.error(f"获取费用分析失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取费用分析失败")
+        raise SystemError("获取费用分析失败", original_exception=e)
 
 @router.post("/export")
 async def export_analytics_data(
@@ -203,7 +204,7 @@ async def export_analytics_data(
                 kb_id=filters.kb_id
             )
         else:
-            raise HTTPException(status_code=400, detail="不支持的报告类型")
+            raise BusinessError("不支持的报告类型")
         
         # 根据格式导出数据
         if export_request.format == "csv":
@@ -213,11 +214,11 @@ async def export_analytics_data(
         elif export_request.format == "pdf":
             return await _export_pdf(data, export_request.report_type, export_request.include_charts)
         else:
-            raise HTTPException(status_code=400, detail="不支持的导出格式")
+            raise BusinessError("不支持的导出格式")
             
     except Exception as e:
         Logger.error(f"导出分析数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="导出分析数据失败")
+        raise SystemError("导出分析数据失败", original_exception=e)
 
 async def _export_csv(data: Any, report_type: str) -> StreamingResponse:
     """导出CSV格式"""

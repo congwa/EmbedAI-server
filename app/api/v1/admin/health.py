@@ -7,7 +7,9 @@ from sqlalchemy import select, and_, desc
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.services.health_monitor import HealthMonitorService
-from app.core.response import APIResponse, ResponseModel
+from app.core.response import ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError
 from app.schemas.health import (
     SystemHealthOverview, ServiceHealthResponse, SystemAlertResponse,
     SystemResourceMetrics, HealthDashboardData, SystemAlertCreate,
@@ -97,11 +99,11 @@ async def get_health_dashboard(
             uptime_trends=uptime_trends
         )
         
-        return APIResponse.success(data=dashboard_data)
+        return success_response(data=dashboard_data)
         
     except Exception as e:
         Logger.error(f"获取健康监控仪表板失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取健康监控仪表板失败")
+        raise SystemError("获取健康监控仪表板失败", original_exception=e)
 
 @router.get("/overview", response_model=ResponseModel[SystemHealthOverview])
 async def get_system_health_overview(
@@ -112,11 +114,11 @@ async def get_system_health_overview(
     try:
         health_service = HealthMonitorService(db)
         overview = await health_service.get_system_health_overview()
-        return APIResponse.success(data=overview)
+        return success_response(data=overview)
         
     except Exception as e:
         Logger.error(f"获取系统健康概览失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取系统健康概览失败")
+        raise SystemError("获取系统健康概览失败", original_exception=e)
 
 @router.get("/services", response_model=ResponseModel[List[ServiceHealthResponse]])
 async def get_service_health_status(
@@ -132,11 +134,11 @@ async def get_service_health_status(
             service_name=service_name,
             limit=limit
         )
-        return APIResponse.success(data=services)
+        return success_response(data=services)
         
     except Exception as e:
         Logger.error(f"获取服务健康状态失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取服务健康状态失败")
+        raise SystemError("获取服务健康状态失败", original_exception=e)
 
 @router.post("/services/{service_name}/check", response_model=ResponseModel[ServiceHealthResponse])
 async def perform_health_check(
@@ -149,13 +151,13 @@ async def perform_health_check(
     try:
         health_service = HealthMonitorService(db)
         result = await health_service.perform_health_check(service_name)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise ResourceNotFoundError("服务", service_name, str(e))
     except Exception as e:
         Logger.error(f"执行健康检查失败: {service_name} - {str(e)}")
-        raise HTTPException(status_code=500, detail="执行健康检查失败")
+        raise SystemError("执行健康检查失败", original_exception=e)
 
 @router.get("/resources", response_model=ResponseModel[SystemResourceMetrics])
 async def get_system_resources(
@@ -166,11 +168,11 @@ async def get_system_resources(
     try:
         health_service = HealthMonitorService(db)
         resources = await health_service.get_system_resource_metrics()
-        return APIResponse.success(data=resources)
+        return success_response(data=resources)
         
     except Exception as e:
         Logger.error(f"获取系统资源指标失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取系统资源指标失败")
+        raise SystemError("获取系统资源指标失败", original_exception=e)
 
 @router.get("/alerts", response_model=ResponseModel[List[SystemAlertResponse]])
 async def get_system_alerts(
@@ -223,11 +225,11 @@ async def get_system_alerts(
             ) for alert in alerts_data
         ]
         
-        return APIResponse.success(data=alerts)
+        return success_response(data=alerts)
         
     except Exception as e:
         Logger.error(f"获取系统警告失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取系统警告失败")
+        raise SystemError("获取系统警告失败", original_exception=e)
 
 @router.post("/alerts", response_model=ResponseModel[SystemAlertResponse])
 async def create_system_alert(
@@ -239,11 +241,11 @@ async def create_system_alert(
     try:
         health_service = HealthMonitorService(db)
         alert = await health_service.create_alert(alert_data)
-        return APIResponse.success(data=alert)
+        return success_response(data=alert)
         
     except Exception as e:
         Logger.error(f"创建系统警告失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建系统警告失败")
+        raise SystemError("创建系统警告失败", original_exception=e)
 
 @router.put("/alerts/{alert_id}/resolve", response_model=ResponseModel[SystemAlertResponse])
 async def resolve_system_alert(
@@ -261,10 +263,10 @@ async def resolve_system_alert(
         alert = result.scalar_one_or_none()
         
         if not alert:
-            raise HTTPException(status_code=404, detail="警告不存在")
+            raise ResourceNotFoundError("警告", alert_id)
         
         if alert.is_resolved:
-            raise HTTPException(status_code=400, detail="警告已经被解决")
+            raise BusinessError("警告已经被解决")
         
         # 更新警告状态
         alert.is_resolved = True
@@ -293,10 +295,10 @@ async def resolve_system_alert(
             created_at=alert.created_at
         )
         
-        return APIResponse.success(data=alert_response)
+        return success_response(data=alert_response)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"解决系统警告失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="解决系统警告失败")
+        raise SystemError("解决系统警告失败", original_exception=e)

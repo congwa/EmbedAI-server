@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.services.auth import get_current_admin_user
 from app.services.integration import IntegrationService
-from app.core.response import APIResponse, ResponseModel
+from app.core.response import ResponseModel
+from app.core.response_utils import success_response
+from app.core.exceptions_new import SystemError, BusinessError, ResourceNotFoundError
 from app.schemas.integration import (
     APIKeyCreate, APIKeyResponse, APIKeyCreateResponse,
     WebhookCreate, WebhookUpdate, WebhookResponse,
@@ -32,11 +34,11 @@ async def get_integration_dashboard(
     try:
         integration_service = IntegrationService(db)
         dashboard_data = await integration_service.get_integration_dashboard()
-        return APIResponse.success(data=dashboard_data)
+        return success_response(data=dashboard_data)
         
     except Exception as e:
         Logger.error(f"获取集成管理仪表板数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取集成管理仪表板数据失败")
+        raise SystemError("获取集成管理仪表板数据失败", original_exception=e)
 
 # ==================== API密钥管理 ====================
 
@@ -50,11 +52,11 @@ async def create_api_key(
     try:
         integration_service = IntegrationService(db)
         api_key = await integration_service.create_api_key(key_data, current_admin.id)
-        return APIResponse.success(data=api_key)
+        return success_response(data=api_key)
         
     except Exception as e:
         Logger.error(f"创建API密钥失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建API密钥失败")
+        raise SystemError("创建API密钥失败", original_exception=e)
 
 @router.get("/api-keys", response_model=ResponseModel[List[APIKeyResponse]])
 async def get_api_keys(
@@ -68,11 +70,11 @@ async def get_api_keys(
     try:
         integration_service = IntegrationService(db)
         api_keys = await integration_service.get_api_keys(skip, limit, is_active)
-        return APIResponse.success(data=api_keys)
+        return success_response(data=api_keys)
         
     except Exception as e:
         Logger.error(f"获取API密钥列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取API密钥列表失败")
+        raise SystemError("获取API密钥列表失败", original_exception=e)
 
 @router.delete("/api-keys/{key_id}", response_model=ResponseModel[bool])
 async def revoke_api_key(
@@ -84,13 +86,13 @@ async def revoke_api_key(
     try:
         integration_service = IntegrationService(db)
         result = await integration_service.revoke_api_key(key_id)
-        return APIResponse.success(data=result)
+        return success_response(data=result)
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise ResourceNotFoundError("API密钥", key_id, str(e))
     except Exception as e:
         Logger.error(f"撤销API密钥失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="撤销API密钥失败")
+        raise SystemError("撤销API密钥失败", original_exception=e)
 
 @router.get("/api-keys/usage-stats", response_model=ResponseModel[APIUsageStatsResponse])
 async def get_api_usage_stats(
@@ -105,11 +107,11 @@ async def get_api_usage_stats(
             usage_request.start_date,
             usage_request.end_date
         )
-        return APIResponse.success(data=stats)
+        return success_response(data=stats)
         
     except Exception as e:
         Logger.error(f"获取API使用统计失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取API使用统计失败")
+        raise SystemError("获取API使用统计失败", original_exception=e)
 
 # ==================== Webhook管理 ====================
 
@@ -123,11 +125,11 @@ async def create_webhook(
     try:
         integration_service = IntegrationService(db)
         webhook = await integration_service.create_webhook(webhook_data, current_admin.id)
-        return APIResponse.success(data=webhook)
+        return success_response(data=webhook)
         
     except Exception as e:
         Logger.error(f"创建Webhook失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建Webhook失败")
+        raise SystemError("创建Webhook失败", original_exception=e)
 
 @router.get("/webhooks", response_model=ResponseModel[List[WebhookResponse]])
 async def get_webhooks(
@@ -141,11 +143,11 @@ async def get_webhooks(
     try:
         # 这里需要在IntegrationService中实现get_webhooks方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取Webhook列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取Webhook列表失败")
+        raise SystemError("获取Webhook列表失败", original_exception=e)
 
 @router.put("/webhooks/{webhook_id}", response_model=ResponseModel[WebhookResponse])
 async def update_webhook(
@@ -158,13 +160,13 @@ async def update_webhook(
     try:
         integration_service = IntegrationService(db)
         webhook = await integration_service.update_webhook(webhook_id, webhook_data)
-        return APIResponse.success(data=webhook)
+        return success_response(data=webhook)
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise ResourceNotFoundError("Webhook", webhook_id, str(e))
     except Exception as e:
         Logger.error(f"更新Webhook失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新Webhook失败")
+        raise SystemError("更新Webhook失败", original_exception=e)
 
 @router.post("/webhooks/{webhook_id}/test", response_model=ResponseModel[WebhookDeliveryResponse])
 async def test_webhook(
@@ -177,13 +179,13 @@ async def test_webhook(
     try:
         integration_service = IntegrationService(db)
         delivery = await integration_service.test_webhook(webhook_id, test_request)
-        return APIResponse.success(data=delivery)
+        return success_response(data=delivery)
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise ResourceNotFoundError("Webhook", webhook_id, str(e))
     except Exception as e:
         Logger.error(f"测试Webhook失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="测试Webhook失败")
+        raise SystemError("测试Webhook失败", original_exception=e)
 
 @router.get("/webhooks/{webhook_id}/deliveries", response_model=ResponseModel[List[WebhookDeliveryResponse]])
 async def get_webhook_deliveries(
@@ -197,11 +199,11 @@ async def get_webhook_deliveries(
     try:
         # 这里需要在IntegrationService中实现get_webhook_deliveries方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取Webhook投递记录失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取Webhook投递记录失败")
+        raise SystemError("获取Webhook投递记录失败", original_exception=e)
 
 # ==================== 第三方集成管理 ====================
 
@@ -215,11 +217,11 @@ async def create_integration(
     try:
         integration_service = IntegrationService(db)
         integration = await integration_service.create_integration(integration_data, current_admin.id)
-        return APIResponse.success(data=integration)
+        return success_response(data=integration)
         
     except Exception as e:
         Logger.error(f"创建第三方集成失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建第三方集成失败")
+        raise SystemError("创建第三方集成失败", original_exception=e)
 
 @router.get("/integrations", response_model=ResponseModel[List[IntegrationResponse]])
 async def get_integrations(
@@ -234,11 +236,11 @@ async def get_integrations(
     try:
         # 这里需要在IntegrationService中实现get_integrations方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取第三方集成列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取第三方集成列表失败")
+        raise SystemError("获取第三方集成列表失败", original_exception=e)
 
 @router.get("/integration-templates", response_model=ResponseModel[List[IntegrationTemplateResponse]])
 async def get_integration_templates(
@@ -253,11 +255,11 @@ async def get_integration_templates(
     try:
         # 这里需要在IntegrationService中实现get_integration_templates方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取集成模板列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取集成模板列表失败")
+        raise SystemError("获取集成模板列表失败", original_exception=e)
 
 # ==================== API文档管理 ====================
 
@@ -271,11 +273,11 @@ async def create_api_documentation(
     try:
         integration_service = IntegrationService(db)
         documentation = await integration_service.create_api_documentation(doc_data, current_admin.id)
-        return APIResponse.success(data=documentation)
+        return success_response(data=documentation)
         
     except Exception as e:
         Logger.error(f"创建API文档失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建API文档失败")
+        raise SystemError("创建API文档失败", original_exception=e)
 
 @router.get("/documentation", response_model=ResponseModel[List[APIDocumentationResponse]])
 async def get_api_documentation(
@@ -293,11 +295,11 @@ async def get_api_documentation(
         documentation = await integration_service.get_api_documentation(
             skip, limit, category, version, is_published
         )
-        return APIResponse.success(data=documentation)
+        return success_response(data=documentation)
         
     except Exception as e:
         Logger.error(f"获取API文档列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取API文档列表失败")
+        raise SystemError("获取API文档列表失败", original_exception=e)
 
 @router.put("/documentation/{doc_id}", response_model=ResponseModel[APIDocumentationResponse])
 async def update_api_documentation(
@@ -310,13 +312,13 @@ async def update_api_documentation(
     try:
         # 这里需要在IntegrationService中实现update_api_documentation方法
         # 为了简化，暂时返回错误
-        raise HTTPException(status_code=404, detail="API文档不存在")
+        raise ResourceNotFoundError("API文档", doc_id)
         
     except HTTPException:
         raise
     except Exception as e:
         Logger.error(f"更新API文档失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新API文档失败")
+        raise SystemError("更新API文档失败", original_exception=e)
 
 @router.delete("/documentation/{doc_id}", response_model=ResponseModel[bool])
 async def delete_api_documentation(
@@ -328,11 +330,11 @@ async def delete_api_documentation(
     try:
         # 这里需要在IntegrationService中实现delete_api_documentation方法
         # 为了简化，暂时返回True
-        return APIResponse.success(data=True)
+        return success_response(data=True)
         
     except Exception as e:
         Logger.error(f"删除API文档失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="删除API文档失败")
+        raise SystemError("删除API文档失败", original_exception=e)
 
 # ==================== API端点管理 ====================
 
@@ -349,8 +351,8 @@ async def get_api_endpoints(
     try:
         # 这里需要在IntegrationService中实现get_api_endpoints方法
         # 为了简化，暂时返回空列表
-        return APIResponse.success(data=[])
+        return success_response(data=[])
         
     except Exception as e:
         Logger.error(f"获取API端点列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取API端点列表失败")
+        raise SystemError("获取API端点列表失败", original_exception=e)
