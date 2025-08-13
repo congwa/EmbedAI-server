@@ -6,7 +6,7 @@ authors = ["congwa <cong_wa@163.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.10,<3.14"
 openai = "^1.61.1"
 fastapi = "^0.115.8"
 uvicorn = "^0.34.0"
@@ -29,7 +29,7 @@ httpx = "^0.28.1"
 aiosqlite = "^0.21.0"
 alembic = "^1.14.1"
 aioredis = "^2.0.1"
-unstructured = {version = "^0.15.0", extras = ["pptx", "csv"]}
+unstructured = {version = "^0.18.11", extras = ["pptx", "csv"]}
 pyotp = "^2.9.0"
 qrcode = {extras = ["pil"], version = "^8.2"}
 aiohttp = "^3.12.15"
